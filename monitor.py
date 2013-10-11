@@ -27,7 +27,7 @@ class MonitorService(object):
 
     def DNS_Lookup(self, data):
         if "id" in data and data["id"] in self.monitor.nodes:
-            return json.dumps({"command" : "ok", "node" :
+            return json.dumps({"command" : "dns_reply", "node" :
                 self.monitor.nodes[data["id"]]})
         else:
             return json.dumps({"command" : "error", "reason" : "id does not " +
@@ -40,7 +40,7 @@ class MonitorService(object):
             except:
                 return json.dumps({"command" : "error", "reason" : ""})
             return json.dumps({"command" : "ok"})
-        return json.dumps({"command" : "error", "reason" : "No id or no node in" +
+        return json.dumps({"command" : "error", "reason" : "No id or no node in " +
                             "message"})
 
     commands = { "lookup"   : DNS_Lookup,
