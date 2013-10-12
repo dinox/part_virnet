@@ -4,7 +4,11 @@ from twisted.internet import defer
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.protocols.basic import NetstringReceiver
 
-
+#global variables
+monitor = "undefinded"
+my_id = 0
+my_node = '127.0.0.1'
+neighbourhood = None
 
 def parse_args():
     usage = """usage: %prog [options] [hostname]:port
@@ -42,6 +46,14 @@ def parse_args():
         return {"host" : host, "port" : int(port)}
 
     return options, parse_address(address[0])
+
+class Neighbourhood(object):
+    is_initialized = False
+    nodeIDs = {}
+    addresses = dict()
+
+    def initialize(self):
+        pass
 
 class MonitorClientService(object):
 
@@ -121,13 +133,39 @@ def init_with_monitor(monitor, my_node, my_id):
     reactor.connectTCP(monitor["host"], monitor["port"], factory)
     return factory.deferred
 
+def test():
+    global monitor, my_id
+    from twisted.internet import reactor
+    service = MonitorClientService()
+    factory = MonitorClientFactory(service, {"command" : "lookup", "id" : my_id})
+    reactor.connectTCP(monitor["host"], monitor["port"], factory)
+
+#Ping call to measure the latency (called periodically by
+# the reactor through LoopingCall)
+def measure_latency():
+    pass
+
+# Heartbeat function of the client (called periodically 
+# by the reactor through LoopingCall)
+#   Collect pings from neighbors
+#   Send alive message
+def client_heartbeat():
+    global neighbourhood
+    if not neighbourhood.is_initialized:
+        neighbourhood.initialize()
+
 def main():
+    global monitor, my_id, my_node, neighbourhood
     options, monitor = parse_args()
     my_id = options.id or 0
     my_node = {"host" : options.iface or
             socket.gethostbyname(socket.gethostname()),
             "port" : options.port or 0}
     from twisted.internet import reactor
+    from twisted.internet.task import LoopingCall
+
+    # initialize Neighbourhood
+    neighbourhood = Neighbourhood()
 
     def init_done(s):
         print "Initialized"
@@ -138,7 +176,10 @@ def main():
 
     d = init_with_monitor(monitor, my_node, my_id)
     d.addBoth(init_done)
-    d.addBoth(all_done)
+    #d.addBoth(all_done)
+
+    lc = LoopingCall(test)
+    lc.start(2)
 
     reactor.run()
 
