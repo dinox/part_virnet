@@ -1,4 +1,4 @@
-import optparse, sys, json, socket, traceback
+import optparse, sys, json, socket, traceback, SocketServer, threading
 
 from twisted.internet import defer
 from twisted.internet.protocol import Protocol, ClientFactory
@@ -49,11 +49,24 @@ def parse_args():
 
 class Neighbourhood(object):
     is_initialized = False
-    nodeIDs = {}
+    nodeIDs = []
     addresses = dict()
 
-    def initialize(self):
-        pass
+    def __init__(self, vir_nodes):
+        global my_id
+        for node in vir_nodes:
+            if not node == my_id:
+                self.nodeIDs.append(node)
+        self.lookup()
+
+    def lookup(self):
+        global monitor, my_id
+        from twisted.internet import reactor
+        for node in self.nodeIDs:
+            service = MonitorClientService()
+            factory = MonitorClientFactory(service, {"command" : "lookup", "id"
+                : node})
+            reactor.connectTCP(monitor["host"], monitor["port"], factory)
 
 class MonitorClientService(object):
 
@@ -121,6 +134,127 @@ class MonitorClientFactory(ClientFactory):
             d, self.deferred = self.deferred, None
             d.errback(reason)
 
+# UDP serversocket, answers to ping requests
+
+class MyUDPServer(SocketServer.ThreadingUDPServer):
+    allow_reuse_address = True
+
+class MyUDPServerHandler(SocketServer.BaseRequestHandler):
+    def handle(self):
+        global last_ping, my_port, members, coordinator, my_id, is_alive,\
+                COORDINATOR_TIMEOUT, DEBUG_MODE
+        if time.time() > is_alive + COORDINATOR_TIMEOUT:
+            # too long not alive, kill myself
+            log_exception("DEAD in MyUDPServerHandler.handle", "Assume main" + \
+                    "thread is dead, kill myself.")
+            sys.exit()
+        try:
+            data = self.request[0].decode().strip()
+            socket = self.request[1]
+            # Reply with our ID
+            socket.sendto(str(my_id).encode(), self.client_address)
+            # If ping was from coordinator, update last_time variable with the
+            # current time
+            if str(data) == str(coordinator["id"]):
+                last_ping = time.time()
+        except Exception, e:
+            log_exception("EXCEPTION in MyUDPServerHandler.handle", e)
+            if DEBUG_MODE:
+                traceback.print_exc()
+
+# Log functions
+
+def log_status(msg):
+    global LOG_FILE, EXCEPTION_FILE
+    for filename in (LOG_FILE, EXCEPTION_FILE):
+        f = open(filename, "a")
+        f.write(msg + "\n")
+        f.close()
+    print(msg)
+
+def log_membership():
+    global is_coordinator, LOG_FILE
+    filename = LOG_FILE
+    log_timestamp(filename)
+    if not is_coordinator:
+        log_coordinator(filename)
+    log_members(filename)
+
+def log_event(nodeID, event):
+    global LOG_FILE
+    filename = LOG_FILE
+    log_timestamp(filename)
+    tab = "    "
+    msg = tab + "[EVENT " + event + "]: node" + str(nodeID)
+    f = open(filename, "a")
+    f.write(msg + "\n")
+    print(msg)
+    f.close()
+    log_members(filename)
+
+def log_timestamp(filename):
+    f = open(filename, "a")
+    msg = time.strftime("%Y/%m/%d %H:%M:%S") + ":"
+    f.write(msg + "\n")
+    print(msg)
+    f.close()
+
+def log_coordinator(filename):
+    global coordinator
+    f = open(filename, "a")
+    tab = "    "
+    msg = tab + "[COORDINATOR]: node" + str(coordinator["id"])
+    f.write(msg + "\n")
+    print(msg)
+    f.close()
+
+def log_members(filename):
+    global is_coordinator, members
+    f = open(filename, "a")
+    tab = "    "
+    msg = tab + "[MEMBERS]: ["
+    is_empty = True
+    # Make copy of members since another thread may change it 
+    for nodeID, node in copy.deepcopy(members).items():
+        if not is_empty:
+            msg = msg + ", "
+        msg = msg + "node" + str(nodeID)
+        is_empty = False
+    msg = msg + "]"
+    f.write(msg + "\n ")
+    print(msg)
+    f.close()
+    log_exception("INFO", "My id: node" + str(my_id))
+
+def log_latency(nodeID, new_latency):
+    global pings, my_id, LATENCY_FILE
+    f = open(LATENCY_FILE, "a")
+    msg = "["+str(my_id)+", "+str(nodeID)+", "+str(new_latency)+\
+            ", "+str(pings[nodeID])+", "+str(time.time())+"]"
+    f.write(msg+"\n")
+    f.close()
+    print(msg)
+
+def log_pings(ping_list, sourceID):
+    global PINGS_FILE
+    f = open(PINGS_FILE, "a")
+    print("LOG PINGS: ")
+    for destID, line in ping_list.items():
+        msg = "[" + str(sourceID) + ", " + str(destID) + ", " + \
+                str(line) + "]"
+        f.write(msg + "\n")
+        print(msg)
+    f.close()
+
+def log_exception(info, exception):
+    global EXCEPTION_FILE
+    f = open(EXCEPTION_FILE, "a")
+    msg = time.strftime("%Y/%m/%d %H:%M:%S") + ": " + info + "\n"
+    msg = msg + "    " + str(exception)
+    #print(msg)
+    f.write(msg + "\n")
+    f.close()
+
 
 def init_with_monitor(monitor, my_node, my_id):
     """
@@ -154,18 +288,38 @@ def client_heartbeat():
     if not neighbourhood.is_initialized:
         neighbourhood.initialize()
 
+# INITIALIZATION
+
+def initialize_UDP_socket(port):
+    # listen for UDP messages for ping request
+    pingServer = MyUDPServer(('0.0.0.0', port), MyUDPServerHandler)
+    pingThread = threading.Thread(target=pingServer.serve_forever)
+    pingThread.daemon = True
+    pingThread.start()
+
+# create dummy/test neighbourhood, should be replaced with real neighourhood
+# initialization
+def init_neighbourhood_dummy(vir_nodes):
+    global neighbourhood
+    neighbourhood = Neighbourhood(vir_nodes)
+
+
+# MAIN
+
 def main():
     global monitor, my_id, my_node, neighbourhood
     options, monitor = parse_args()
     my_id = options.id or 0
     my_node = {"host" : options.iface or
             socket.gethostbyname(socket.gethostname()),
-            "port" : options.port or 0}
+            "port" : options.port or 13337}
     from twisted.internet import reactor
     from twisted.internet.task import LoopingCall
 
+    initialize_UDP_socket(my_node["port"]+1)
+
     # initialize Neighbourhood
-    neighbourhood = Neighbourhood()
+    init_neighbourhood_dummy([0,1,2,3])
 
     def init_done(s):
         print "Initialized"
