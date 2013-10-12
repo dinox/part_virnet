@@ -10,6 +10,12 @@ my_id = 0
 my_node = '127.0.0.1'
 neighbourhood = None
 
+# global output file names
+LOG_FILE = "overlag.log"
+LATENCY_FILE = "latency.log"
+PINGS_FILE = "pings.log"
+EXCEPTION_FILE = "exceptions.log"
+
 def parse_args():
     usage = """usage: %prog [options] [hostname]:port
     Specify hostname and port of monitor node.
@@ -67,6 +73,7 @@ class Neighbourhood(object):
             factory = MonitorClientFactory(service, {"command" : "lookup", "id"
                 : node})
             reactor.connectTCP(monitor["host"], monitor["port"], factory)
+        log_status("Neighbourhood lookup")
 
 class MonitorClientService(object):
 
@@ -74,8 +81,9 @@ class MonitorClientService(object):
         pass
 
     def DNS_Reply(self, reply):
+        global neighbourhood
         if "node" in reply:
-            return reply["node"]
+            neighbourhood.addresses[reply["id"]] = reply["node"]
         else:
             print "DNS reply did not contain node data"
 
@@ -161,6 +169,13 @@ class MyUDPServerHandler(SocketServer.BaseRequestHandler):
             log_exception("EXCEPTION in MyUDPServerHandler.handle", e)
             if DEBUG_MODE:
                 traceback.print_exc()
+
+# Ping request
+
+def send_ping():
+    global neighbourhood
+    for nodeID, node in neighbourhood.nodeIDs:
+        pass
 
 # Log functions
 
@@ -316,6 +331,8 @@ def main():
     from twisted.internet import reactor
     from twisted.internet.task import LoopingCall
 
+    log_status("Startup node" + str(my_id) + " with address " + str(my_node))
+
     initialize_UDP_socket(my_node["port"]+1)
 
     # initialize Neighbourhood
@@ -332,8 +349,11 @@ def main():
     d.addBoth(init_done)
     #d.addBoth(all_done)
 
-    lc = LoopingCall(test)
-    lc.start(2)
+    #lc = LoopingCall(test)
+    #lc.start(2)
+
+    lc = LoopingCall(neighbourhood.lookup)
+    lc.start(5)
 
     reactor.run()
 
