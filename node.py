@@ -226,32 +226,31 @@ class NodeServerFactory(ServerFactory):
 # UDP serversocket, answers to ping requests
 
 class UDPServer(DatagramProtocol):
-    def datagramReceived(self, datagram, address):
-        print("*** UDP RECEIVED" + str(address) + " - " + datagram + "***")
-        self.transport.write(datagram, address)
+    def datagramReceived(self, data, (host, port)):
+        print "received %r from %s:%d" % (data, host, port)
+        self.transport.write(data, (host, port))
 
 class EchoClientDatagramProtocol(DatagramProtocol):
 
     msg = ''
     host = ''
     port = 0
-
+    
     def __init__(self, addr, msg):
         self.host = addr["host"]
         self.port = addr["port"]+1
         self.msg = msg
-        
-    def sendDatagram(self):
-        self.transport.write(self.msg)
-
+    
     def startProtocol(self):
+        print("START UDP")
         self.transport.connect(self.host, self.port)
         self.sendDatagram()
-        print("*** UDP SENT " + self.host + ":" + str(self.port) + "***")
 
     def datagramReceived(self, datagram, host):
-        print("*** Datagram received: " + datagram + "*!*!*")
-        sys_exit()
+        print 'Datagram received: ', repr(datagram)
+    
+    def sendDatagram(self):
+        self.transport.write(self.msg)
 
 # Ping request
 
@@ -381,7 +380,9 @@ def init_with_monitor(monitor, my_node, my_id):
 # the reactor through LoopingCall)
 def measure_latency():
     global MyNode
-    for nodeID in MyNode.neighbourhood.addresses:
+    print("MEASURE LATENCY")
+    print(MyNode.neighbourhood.addresses)
+    for nodeID in MyNode.neighbourhood.addresses:        
         addr = MyNode.neighbourhood.addresses[nodeID]
         protocol = EchoClientDatagramProtocol(addr, "msg")
         reactor.listenUDP(0, protocol)
@@ -425,12 +426,14 @@ def main():
             str(MyNode.my_node))
 
     # initialize UDP socket
-    reactor.listenUDP(MyNode.my_node["port"]+1, UDPServer())
+    port = reactor.listenUDP(MyNode.my_node["port"]+1, UDPServer(), interface=MyNode.my_node["host"]    )
+    print 'Listening on %s.' % (port.getHost())
 
     service = ClientService()
     factory = NodeServerFactory(service)
     port = reactor.listenTCP(MyNode.my_node["port"], factory, 
             interface=MyNode.my_node["host"])
+    print 'Listening on %s.' % (port.getHost())
 
     # initialize Neighbourhood
     init_neighbourhood_dummy([0,1])
