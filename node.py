@@ -1,15 +1,25 @@
-import optparse, sys, json, socket, traceback, SocketServer, threading
+import optparse, sys, json, socket, traceback, SocketServer, threading, time
 
 from twisted.internet import defer
-from twisted.internet.protocol import Protocol, ClientFactory
+from twisted.internet.protocol import Protocol, ClientFactory, ServerFactory,\
+    DatagramProtocol
 from twisted.protocols.basic import NetstringReceiver
 
 #global variables
-monitor = "undefinded"
-my_id = 0
-my_node = '127.0.0.1'
-neighbourhood = None
-overlay = None
+class Node(object):
+    monitor = "undefinded"
+    my_id = 0
+    my_node = '127.0.0.1'
+    my_sqn = 0
+    neighbourhood = None
+    overlay = None
+    client_factory = None
+
+    def get_sqn(self):
+        self.my_sqn = self.my_sqn + 1
+        return self.my_sqn
+
+MyNode = Node()
 
 # global output file names
 LOG_FILE = "overlay.log"
@@ -57,31 +67,41 @@ def parse_args():
 class Neighbourhood(object):
     nodes = []
     addresses = dict()
+    pings = dict()
 
     def __init__(self, vir_nodes):
-        global my_id
+        global MyNode
         for node in vir_nodes:
-            if not node == my_id:
+            if not node == MyNode.my_id:
                 self.nodes.append(node)
         self.lookup()
 
     def lookup(self):
-        global monitor, my_id
+        global MyNode
         from twisted.internet import reactor
         for node in self.nodes:
-            send_msg(monitor, {"command" : "lookup", "id" : node})
+            send_msg(MyNode.monitor, {"command" : "lookup", "id" : node})
         log_status("Neighbourhood lookup")
 
 class Overlay(object):
     nodes = dict()
+    last_msg = dict()
     edges = dict()
 
-    def update_node(self, node, neighbours):
-        if node in nodes:
-            del nodes[node]
-            del edges[node]
-        nodes[node] = time.time()
-        edges[node] = neighbours
+    def update_node(self, node, neighbours, sqn):
+        self.nodes[node] = sqn
+        self.last_msg[node] = time.time()
+        self.edges[node] = neighbours
+
+    def is_valid_msg(self, msg):
+        if msg["source"] == MyNode.my_id:
+            return False
+        if not msg["source"] in self.nodes:
+            return True
+        if self.nodes[msg["source"]] < msg["sequence"]:
+            return True
+        else:
+            return False
 
 
 class ClientService(object):
@@ -90,9 +110,9 @@ class ClientService(object):
         pass
 
     def DNS_Reply(self, reply):
-        global neighbourhood
+        global MyNode
         if "node" in reply:
-            neighbourhood.addresses[reply["id"]] = reply["node"]
+            MyNode.neighbourhood.addresses[reply["id"]] = reply["node"]
         else:
             print "DNS reply did not contain node data"
 
@@ -103,15 +123,15 @@ class ClientService(object):
             print "Unexpected error with no reason"
 
     def Heartbeat(self, reply):
-        global overlay, neighbourhood, my_id
-        overlay.update_node(reply["source"], reply["neighbours"])
-        for node in neighbourhood.nodes:
-            if not node in reply["received"] and node in neighbourhood.addresses:
-                reply["received"].append(my_id)
-                send_msg(neighbourhood.addresses[node], reply)
-                #forward message
-                pass
-        print("Heartbeat message received")
+        global MyNode
+        if MyNode.overlay.is_valid_msg(reply):
+            MyNode.overlay.update_node(reply["source"], reply["neighbours"],
+                    reply["sequence"])
+            for node in MyNode.neighbourhood.nodes:
+                send_msg(MyNode.neighbourhood.addresses[node], reply)
+            print("Heartbeat message received")
+            print(MyNode.overlay.nodes)
+            print(MyNode.overlay.last_msg)
 
     commands = {"ok"    : OK,
                 "error" : Error,
@@ -140,7 +160,29 @@ class ClientProtocol(NetstringReceiver):
 
         self.factory.handleReply(command, reply)
 
-class ClientFactory(ClientFactory):
+class ServerProtocol(NetstringReceiver):
+    def stringReceived(self, request):
+        print "Received: %s" % request
+        command = json.loads(request)["command"]
+        data = json.loads(request)
+
+        if command not in self.factory.service.commands:
+            print "Command <%s> does not exist!" % command
+            self.transport.loseConnection()
+            return
+
+        self.commandReceived(command, data)
+
+    def commandReceived(self, command, data):
+        reply = self.factory.reply(command, data)
+
+        if reply is not None:
+            print "Send: %s" % reply
+            self.sendString(reply)
+
+        self.transport.loseConnection()
+
+class NodeClientFactory(ClientFactory):
 
     protocol = ClientProtocol
 
@@ -163,39 +205,55 @@ class ClientFactory(ClientFactory):
             d, self.deferred = self.deferred, None
             d.errback(reason)
 
+class NodeServerFactory(ServerFactory):
+
+    protocol = ServerProtocol
+
+    def __init__(self, service):
+        self.service = service
+
+    def reply(self, command, data):
+        create_reply = self.service.commands[command]
+        if create_reply is None: # no such command
+            return None
+        try:
+            return create_reply(self.service, data)
+        except:
+            traceback.print_exc()
+            return None # command failed
+
+
 # UDP serversocket, answers to ping requests
 
-class MyUDPServer(SocketServer.ThreadingUDPServer):
-    allow_reuse_address = True
+class UDPServer(DatagramProtocol):
+    def datagramReceived(self, datagram, address):
+        self.transport.write(datagram, address)
 
-class MyUDPServerHandler(SocketServer.BaseRequestHandler):
-    def handle(self):
-        global last_ping, my_port, members, coordinator, my_id, is_alive,\
-                COORDINATOR_TIMEOUT, DEBUG_MODE
-        if time.time() > is_alive + COORDINATOR_TIMEOUT:
-            # too long not alive, kill myself
-            log_exception("DEAD in MyUDPServerHandler.handle", "Assume main" + \
-                    "thread is dead, kill myself.")
-            sys.exit()
-        try:
-            data = self.request[0].decode().strip()
-            socket = self.request[1]
-            # Reply with our ID
-            socket.sendto(str(my_id).encode(), self.client_address)
-            # If ping was from coordinator, update last_time variable with the
-            # current time
-            if str(data) == str(coordinator["id"]):
-                last_ping = time.time()
-        except Exception, e:
-            log_exception("EXCEPTION in MyUDPServerHandler.handle", e)
-            if DEBUG_MODE:
-                traceback.print_exc()
+class EchoClientDatagramProtocol(DatagramProtocol):
+
+    msg = ''
+    host = ''
+    port = 0
+
+    def __init__(self, host, port, msg):
+        self.host = host
+        self.port = port
+        self.msg = msg
+
+    def startProtocol(self):
+        self.transport.connect(self.host, self.port)
+        self.transport.write(datagram)
+        self.sendDatagram()
+        reactor.stop()
+
+    def datagramReceived(self, datagram, host):
+        print 'Datagram received: ', repr(datagram)
 
 # Ping request
 
 def send_ping():
-    global neighbourhood
-    for nodeID, node in neighbourhood.nodes:
+    global MyNode
+    for nodeID, node in MyNode.neighbourhood.nodes:
         pass
 
 # send TCP message
@@ -203,8 +261,12 @@ def send_ping():
 def send_msg(address, msg):
     from twisted.internet import reactor
     service = ClientService()
-    factory = ClientFactory(service, msg)
+    factory = NodeClientFactory(service, msg)
+    factory.deferred.addErrback(error_callback)
     reactor.connectTCP(address["host"], address["port"], factory)
+
+def error_callback(s):
+    log_exception("Callback", str(s))
 
 # Log functions
 
@@ -306,14 +368,10 @@ def init_with_monitor(monitor, my_node, my_id):
     """
     from twisted.internet import reactor
     service = ClientService()
-    factory = ClientFactory(service, {"command" : "map", "id" : my_id, 
+    factory = NodeClientFactory(service, {"command" : "map", "id" : my_id, 
                                             "node" : my_node})
     reactor.connectTCP(monitor["host"], monitor["port"], factory)
     return factory.deferred
-
-def test():
-    global monitor, my_id
-    send_msg(monitor, {"command" : "lookup", "id" : my_id})
 
 #Ping call to measure the latency (called periodically by
 # the reactor through LoopingCall)
@@ -325,70 +383,57 @@ def measure_latency():
 #   Collect pings from neighbours
 #   Send alive message
 def client_heartbeat():
-    global neighbourhood, my_id
+    global MyNode
     # send heartbeat msg to all neighbours
     print("Client Heartbeat")
-    msg = {"command":"heartbeat","source":my_id,"received":[my_id],\
-            "neighbours":{1,0.12}}
+    msg = {"command":"heartbeat","source":MyNode.my_id,\
+            "sequence":MyNode.get_sqn(),"neighbours":{1:0.12}}
     print(msg)
-    for nodeID in neighbourhood.addresses:
-        print(neighbourhood.addresses[nodeID])
-        send_msg(neighbourhood.addresses[nodeID], msg)
+    for nodeID in MyNode.neighbourhood.addresses:
+        send_msg(MyNode.neighbourhood.addresses[nodeID], msg)
 
 # INITIALIZATION
-
-def initialize_UDP_socket(port):
-    # listen for UDP messages for ping request
-    pingServer = MyUDPServer(('0.0.0.0', port), MyUDPServerHandler)
-    pingThread = threading.Thread(target=pingServer.serve_forever)
-    pingThread.daemon = True
-    pingThread.start()
 
 # create dummy/test neighbourhood, should be replaced with real neighourhood
 # initialization
 def init_neighbourhood_dummy(vir_nodes):
-    global neighbourhood
-    neighbourhood = Neighbourhood(vir_nodes)
+    global MyNode
+    MyNode.neighbourhood = Neighbourhood(vir_nodes)
 
 
 # MAIN
 
 def main():
-    global monitor, my_id, my_node, neighbourhood, overlay
-    options, monitor = parse_args()
-    my_id = options.id or 0
-    my_node = {"host" : options.iface or
+    global MyNode
+    options, MyNode.monitor = parse_args()
+    MyNode.my_id = options.id or 0
+    MyNode.my_node = {"host" : options.iface or
             socket.gethostbyname(socket.gethostname()),
             "port" : options.port or 13337}
     from twisted.internet import reactor
     from twisted.internet.task import LoopingCall
 
-    log_status("Startup node" + str(my_id) + " with address " + str(my_node))
+    log_status("Startup node" + str(MyNode.my_id) + " with address " +\
+            str(MyNode.my_node))
 
-    initialize_UDP_socket(my_node["port"]+1)
+    # initialize UDP socket
+    reactor.listenUDP(MyNode.my_node["port"]+1, UDPServer())
+
+    service = ClientService()
+    factory = NodeServerFactory(service)
+    port = reactor.listenTCP(MyNode.my_node["port"], factory, 
+            interface=MyNode.my_node["host"])
 
     # initialize Neighbourhood
     init_neighbourhood_dummy([0,1])
-    overlay = Overlay()
+    MyNode.overlay = Overlay()
 
-    def init_done(s):
-        print "Initialized"
+    d = init_with_monitor(MyNode.monitor, MyNode.my_node, MyNode.my_id)
 
-    def all_done(_):
-        print "Exiting..."
-        reactor.stop()
-
-    d = init_with_monitor(monitor, my_node, my_id)
-    d.addBoth(init_done)
-    #d.addBoth(all_done)
-
-    #lc = LoopingCall(test)
-    #lc.start(2)
-
-    lc = LoopingCall(neighbourhood.lookup)
-    lc.start(5)
-
-    LoopingCall(client_heartbeat).start(8)
+    # refresh addresses periodically
+    LoopingCall(MyNode.neighbourhood.lookup).start(30)
+    LoopingCall(client_heartbeat).start(5)
+    LoopingCall(measure_latency).start(10)
 
     reactor.run()
 
