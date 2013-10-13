@@ -8,12 +8,11 @@ from twisted.protocols.basic import NetstringReceiver
 #global variables
 class Node(object):
     monitor = "undefinded"
-    my_id = 0
-    my_node = '127.0.0.1'
+    id = 0
+    host = '127.0.0.1'
     my_sqn = 0
     neighbourhood = None
     overlay = None
-    client_factory = None
 
     def get_sqn(self):
         self.my_sqn = self.my_sqn + 1
@@ -72,7 +71,7 @@ class Neighbourhood(object):
     def __init__(self, vir_nodes):
         global MyNode
         for node in vir_nodes:
-            if not node == MyNode.my_id:
+            if not node == MyNode.id:
                 self.nodes.append(node)
         self.lookup()
 
@@ -94,7 +93,7 @@ class Overlay(object):
         self.edges[node] = neighbours
 
     def is_valid_msg(self, msg):
-        if msg["source"] == MyNode.my_id:
+        if msg["source"] == MyNode.id:
             return False
         if not msg["source"] in self.nodes:
             return True
@@ -227,30 +226,32 @@ class NodeServerFactory(ServerFactory):
 
 class UDPServer(DatagramProtocol):
     def datagramReceived(self, data, (host, port)):
-        print "received %r from %s:%d" % (data, host, port)
         self.transport.write(data, (host, port))
 
-class EchoClientDatagramProtocol(DatagramProtocol):
+class UDPClient(DatagramProtocol):
 
-    msg = ''
     host = ''
     port = 0
-    
-    def __init__(self, addr, msg):
+    node = 0
+
+    def __init__(self, addr, node):
         self.host = addr["host"]
         self.port = addr["port"]+1
-        self.msg = msg
-    
+        self.node = node
+
     def startProtocol(self):
-        print("START UDP")
         self.transport.connect(self.host, self.port)
         self.sendDatagram()
 
     def datagramReceived(self, datagram, host):
+        global MyNode
+        s = datagram.split(":")
+        MyNode.neighbourhood.pings[int(s[0])] = float(s[1])
         print 'Datagram received: ', repr(datagram)
-    
+
     def sendDatagram(self):
-        self.transport.write(self.msg)
+        msg = str(self.node)+":"+str(time.time())
+        self.transport.write(msg)
 
 # Ping request
 
@@ -365,14 +366,14 @@ def log_exception(info, exception):
     f.close()
 
 
-def init_with_monitor(monitor, my_node, my_id):
+def init_with_monitor(monitor, node, my_id):
     """
     Register our DNS data and id_nbr with the monitor at host:port.
     """
     from twisted.internet import reactor
     service = ClientService()
     factory = NodeClientFactory(service, {"command" : "map", "id" : my_id, 
-                                            "node" : my_node})
+                                            "node" : node})
     reactor.connectTCP(monitor["host"], monitor["port"], factory)
     return factory.deferred
 
@@ -382,9 +383,10 @@ def measure_latency():
     global MyNode
     print("MEASURE LATENCY")
     print(MyNode.neighbourhood.addresses)
-    for nodeID in MyNode.neighbourhood.addresses:        
-        addr = MyNode.neighbourhood.addresses[nodeID]
-        protocol = EchoClientDatagramProtocol(addr, "msg")
+    for node in MyNode.neighbourhood.addresses:
+        addr = MyNode.neighbourhood.addresses[node]
+        print(addr)
+        protocol = UDPClient(addr, node)
         reactor.listenUDP(0, protocol)
 
 # Heartbeat function of the client (called periodically 
@@ -395,7 +397,7 @@ def client_heartbeat():
     global MyNode
     # send heartbeat msg to all neighbours
     print("Client Heartbeat")
-    msg = {"command":"heartbeat","source":MyNode.my_id,\
+    msg = {"command":"heartbeat","source":MyNode.id,\
             "sequence":MyNode.get_sqn(),"neighbours":{1:0.12}}
     print(msg)
     for nodeID in MyNode.neighbourhood.addresses:
@@ -415,31 +417,30 @@ def init_neighbourhood_dummy(vir_nodes):
 def main():
     global MyNode
     options, MyNode.monitor = parse_args()
-    MyNode.my_id = options.id or 0
-    MyNode.my_node = {"host" : options.iface or
-            socket.gethostbyname(socket.gethostname()),
-            "port" : options.port or 13337}
-    from twisted.internet import reactor
+    MyNode.id = options.id or 0
+    MyNode.host = options.iface or socket.gethostbyname(socket.gethostname())
+    MyNode.port = options.port or 13337
+
     from twisted.internet.task import LoopingCall
 
-    log_status("Startup node" + str(MyNode.my_id) + " with address " +\
-            str(MyNode.my_node))
+    log_status("Startup node" + str(MyNode.id) + " with address " +\
+            str(MyNode.host)+":"+str(MyNode.port))
 
     # initialize UDP socket
-    port = reactor.listenUDP(MyNode.my_node["port"]+1, UDPServer(), interface=MyNode.my_node["host"]    )
+    port = reactor.listenUDP(MyNode.port+1, UDPServer(), interface=MyNode.host)
     print 'Listening on %s.' % (port.getHost())
 
     service = ClientService()
     factory = NodeServerFactory(service)
-    port = reactor.listenTCP(MyNode.my_node["port"], factory, 
-            interface=MyNode.my_node["host"])
+    port = reactor.listenTCP(MyNode.port, factory, interface=MyNode.host)
     print 'Listening on %s.' % (port.getHost())
 
     # initialize Neighbourhood
     init_neighbourhood_dummy([0,1])
     MyNode.overlay = Overlay()
 
-    d = init_with_monitor(MyNode.monitor, MyNode.my_node, MyNode.my_id)
+    d = init_with_monitor(MyNode.monitor,\
+            {"host":MyNode.host,"port":MyNode.port}, MyNode.id)
 
     # refresh addresses periodically
     LoopingCall(MyNode.neighbourhood.lookup).start(30)
