@@ -1,6 +1,6 @@
 import optparse, sys, json, socket, traceback, SocketServer, threading, time
 
-from twisted.internet import defer
+from twisted.internet import defer, reactor
 from twisted.internet.protocol import Protocol, ClientFactory, ServerFactory,\
     DatagramProtocol
 from twisted.protocols.basic import NetstringReceiver
@@ -127,8 +127,8 @@ class ClientService(object):
         if MyNode.overlay.is_valid_msg(reply):
             MyNode.overlay.update_node(reply["source"], reply["neighbours"],
                     reply["sequence"])
-            for node in MyNode.neighbourhood.nodes:
-                send_msg(MyNode.neighbourhood.addresses[node], reply)
+            for nodeID in MyNode.neighbourhood.addresses:
+                send_msg(MyNode.neighbourhood.addresses[nodeID], reply)
             print("Heartbeat message received")
             print(MyNode.overlay.nodes)
             print(MyNode.overlay.last_msg)
@@ -227,6 +227,7 @@ class NodeServerFactory(ServerFactory):
 
 class UDPServer(DatagramProtocol):
     def datagramReceived(self, datagram, address):
+        print("*** UDP RECEIVED" + str(address) + " - " + datagram + "***")
         self.transport.write(datagram, address)
 
 class EchoClientDatagramProtocol(DatagramProtocol):
@@ -235,19 +236,22 @@ class EchoClientDatagramProtocol(DatagramProtocol):
     host = ''
     port = 0
 
-    def __init__(self, host, port, msg):
-        self.host = host
-        self.port = port
+    def __init__(self, addr, msg):
+        self.host = addr["host"]
+        self.port = addr["port"]+1
         self.msg = msg
+        
+    def sendDatagram(self):
+        self.transport.write(self.msg)
 
     def startProtocol(self):
         self.transport.connect(self.host, self.port)
-        self.transport.write(datagram)
         self.sendDatagram()
-        reactor.stop()
+        print("*** UDP SENT " + self.host + ":" + str(self.port) + "***")
 
     def datagramReceived(self, datagram, host):
-        print 'Datagram received: ', repr(datagram)
+        print("*** Datagram received: " + datagram + "*!*!*")
+        sys_exit()
 
 # Ping request
 
@@ -376,7 +380,11 @@ def init_with_monitor(monitor, my_node, my_id):
 #Ping call to measure the latency (called periodically by
 # the reactor through LoopingCall)
 def measure_latency():
-    pass
+    global MyNode
+    for nodeID in MyNode.neighbourhood.addresses:
+        addr = MyNode.neighbourhood.addresses[nodeID]
+        protocol = EchoClientDatagramProtocol(addr, "msg")
+        reactor.listenUDP(0, protocol)
 
 # Heartbeat function of the client (called periodically 
 # by the reactor through LoopingCall)
@@ -432,8 +440,8 @@ def main():
 
     # refresh addresses periodically
     LoopingCall(MyNode.neighbourhood.lookup).start(30)
-    LoopingCall(client_heartbeat).start(5)
-    LoopingCall(measure_latency).start(10)
+    LoopingCall(client_heartbeat).start(20)
+    LoopingCall(measure_latency).start(5)
 
     reactor.run()
 
