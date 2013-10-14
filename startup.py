@@ -9,6 +9,9 @@ path_to_keyfile = "/Users/erik/.ssh/user13"
 nodes = []
 f = open("nodes.txt", "r")
 
+print """ Welcome to the super startup script by
+Erik Henriksson & Christoph Burkhalter. """
+
 for line in f:
     s = line.strip().split(":")
     nodes.append({"id" : s[0], "host" : s[1]})
@@ -32,18 +35,21 @@ def start_node(node):
     remote["tar"]("-xvzf", "overlay.tar.gz", "--transform",
             "s/dinox-part_virnet......../overlay/")
     remote["mv"]("overlay/node.py", ".")
-    print "[%s]Downloading python..." % node["id"]
-    remote["wget"]("-O", "python2.7-static",
-            "http://pts-mini-gpl.googlecode.com/svn/trunk/staticpython/release/python2.7-static")
-    remote["chmod"]("u+x",  "python2.7-static")
-    print "[%s]Getting Twisted..." % node["id"]
-    remote["wget"]("-O", "py2.7-twisted.tar.gz", 
-            "https://www.dropbox.com/s/4ftmk62rh9py7yj/py2.7-twisted.tar.gz")
-    remote["tar"]("-xvzf", "py2.7-twisted.tar.gz")
+    try:
+        print "[%s]Downloading python..." % node["id"]
+        remote["wget"]("-O", "python2.7-static",
+                "http://pts-mini-gpl.googlecode.com/svn/trunk/staticpython/release/python2.7-static")
+        remote["chmod"]("u+x",  "python2.7-static")
+        print "[%s]Getting Twisted..." % node["id"]
+        remote["wget"]("-O", "py2.7-twisted.tar.gz", 
+                "https://www.dropbox.com/s/4ftmk62rh9py7yj/py2.7-twisted.tar.gz")
+        remote["tar"]("-xvzf", "py2.7-twisted.tar.gz")
+    except:
+        print "[%s]Got an exception, continue with fingers crossed" % node["id"]
     print "[%s]Starting python node..." % node["id"]
     try:
         print remote["./python2.7-static"]("node.py", 
-                "--id", "%s" % (node["id"]), "--port", "12345", "erikhenriksson.se:12345")
+                "--id", "%s" % (node["id"]), "--port", "12235", "erikhenriksson.se:12345")
     except commands.processes.ProcessExecutionError as e:
         print "[%s]Got an exception: %s" % (node["id"], e)
     remote.close()
