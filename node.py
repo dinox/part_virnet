@@ -1,4 +1,8 @@
-import optparse, sys, json, socket, traceback, SocketServer, threading, time
+import optparse, sys, json, socket, traceback, SocketServer, threading, time, os
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(SCRIPT_DIR, 'third_party', 'Twisted-13.1.0'))
+sys.path.append(os.path.join(SCRIPT_DIR, 'third_party', 'zope.interface-4.0.5', 'src'))
 
 from twisted.internet import defer, reactor
 from twisted.internet.protocol import Protocol, ClientFactory, ServerFactory,\
