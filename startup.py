@@ -20,29 +20,34 @@ def start_node(node):
                 keyfile = path_to_keyfile)
     except:
         print "Could not connect to %s" % node
-    else:
-        try:
-            remote["rm"]("-r", "overlay")
-        except commands.processes.ProcessExecutionError:
-            pass
-        remote["wget"]("-O", "overlay.tar.gz", 
-                "https://api.github.com/repos/dinox/part_virnet/tarball")
-        remote["tar"]("-xvzf", "overlay.tar.gz", "--transform",
-                "s/dinox-part_virnet......../overlay/")
-        remote["wget"]("-O", "python2.7-static",
-                "http://pts-mini-gpl.googlecode.com/svn/trunk/staticpython/release/python2.7-static")
-        remote["chmod"]("u+x",  "python2.7-static")
-        remote["wget"]("-O", "py2.7-twisted.tar.gz", 
-                "https://www.dropbox.com/s/4ftmk62rh9py7yj/py2.7-twisted.tar.gz")
-        remote["tar"]("-xvzf", "py2.7-twisted.tar.gz")
-        print remote["./python2.7-static"].run("overlay/node.py", 
-                "--id %s" % (node["id"]), "erikhenriksson.se:13337")
+        return
+    print "[%s]Connected" % node["id"]
+    try:
+        remote["rm"]("-r", "overlay")
+    except commands.processes.ProcessExecutionError:
+        pass
+    print "[%s]Downloading application..." % node["id"]
+    remote["wget"]("-O", "overlay.tar.gz", 
+            "https://api.github.com/repos/dinox/part_virnet/tarball")
+    remote["tar"]("-xvzf", "overlay.tar.gz", "--transform",
+            "s/dinox-part_virnet......../overlay/")
+    remote["mv"]("overlay/node.py", ".")
+    print "[%s]Downloading python..." % node["id"]
+    remote["wget"]("-O", "python2.7-static",
+            "http://pts-mini-gpl.googlecode.com/svn/trunk/staticpython/release/python2.7-static")
+    remote["chmod"]("u+x",  "python2.7-static")
+    print "[%s]Getting Twisted..." % node["id"]
+    remote["wget"]("-O", "py2.7-twisted.tar.gz", 
+            "https://www.dropbox.com/s/4ftmk62rh9py7yj/py2.7-twisted.tar.gz")
+    remote["tar"]("-xvzf", "py2.7-twisted.tar.gz")
+    print "[%s]Starting python node..." % node["id"]
+    try:
+        print remote["./python2.7-static"]("node.py", 
+                "--id", "%s" % (node["id"]), "--port", "12345", "erikhenriksson.se:12345")
+    except commands.processes.ProcessExecutionError as e:
+        print "[%s]Got an exception: %s" % (node["id"], e)
     remote.close()
 
 pool_size = 15  # your "parallelness"
 pool = Pool(pool_size)
-for node in nodes:
-    pool.apply_async(start_node, (node,))
-    time.sleep(0.1)
-pool.close()
-pool.join()
+pool.map(start_node, nodes)

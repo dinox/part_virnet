@@ -1,0 +1,5 @@
+0:righthand.eecs.harvard.edu
+1:planetlab6.cs.cornell.edu
+2:planetlab1.cs.uml.edu
+3:planetlab1.inf.ethz.ch
+4:planetlab01.cs.washington.edu
