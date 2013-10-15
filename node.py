@@ -120,6 +120,7 @@ class ClientService(object):
         global MyNode
         if "node" in reply:
             MyNode.neighbourhood.nodes[reply["id"]] = reply["node"]
+            log_lookup(reply["id"], reply["node"])
         else:
             print "DNS reply did not contain node data"
 
@@ -136,9 +137,7 @@ class ClientService(object):
                     reply["sequence"])
             for nodeID in MyNode.neighbourhood.nodes.keys():
                 send_msg(MyNode.neighbourhood.nodes[nodeID], reply)
-            print("Heartbeat message received")
-            print(MyNode.overlay.nodes)
-            print(MyNode.overlay.last_msg)
+            log_overlay()
 
     commands = {"ok"    : OK,
                 "error" : Error,
@@ -151,12 +150,10 @@ class ClientProtocol(NetstringReceiver):
         self.sendRequest(self.factory.request)
 
     def sendRequest(self, request):
-        print "Sending: %s" % self.factory.request
         self.sendString(json.dumps(request))
 
     def stringReceived(self, reply):
         self.transport.loseConnection()
-        print "Received: %s" % reply
         reply = json.loads(reply)
         command = reply["command"]
 
@@ -169,7 +166,6 @@ class ClientProtocol(NetstringReceiver):
 
 class ServerProtocol(NetstringReceiver):
     def stringReceived(self, request):
-        print "Received: %s" % request
         command = json.loads(request)["command"]
         data = json.loads(request)
 
@@ -184,7 +180,6 @@ class ServerProtocol(NetstringReceiver):
         reply = self.factory.reply(command, data)
 
         if reply is not None:
-            print "Send: %s" % reply
             self.sendString(reply)
 
         self.transport.loseConnection()
@@ -255,7 +250,7 @@ class UDPClient(DatagramProtocol):
         global MyNode
         s = datagram.split(":")
         MyNode.neighbourhood.pings[int(s[0])] = float(s[1])
-        print 'Datagram received: ', repr(datagram)
+#TODO: log pings
 
     def sendDatagram(self):
         msg = str(self.node)+":"+str(time.time())
@@ -284,32 +279,32 @@ def error_callback(s):
 # Log functions
 
 def log_status(msg):
-    global LOG_FILE, EXCEPTION_FILE
-    for filename in (LOG_FILE, EXCEPTION_FILE):
-        f = open(filename, "a")
-        f.write(msg + "\n")
-        f.close()
-    print(msg)
-
-def log_membership():
-    global is_coordinator, LOG_FILE
+    global LOG_FILE
+    msg = "    " + msg
     filename = LOG_FILE
     log_timestamp(filename)
-    if not is_coordinator:
-        log_coordinator(filename)
+    f = open(filename, "a")
+    f.write(msg + "\n")
+    f.close()
+    print(msg)
+
+def log_overlay():
+    global LOG_FILE
+    filename = LOG_FILE
+    log_timestamp(filename)
     log_members(filename)
 
-def log_event(nodeID, event):
+def log_lookup(node, address):
     global LOG_FILE
     filename = LOG_FILE
     log_timestamp(filename)
     tab = "    "
-    msg = tab + "[EVENT " + event + "]: node" + str(nodeID)
+    msg = tab + "[LOOKUP]: node" + str(node) + "->" + address["host"]+\
+            ":" + str(address["port"])
     f = open(filename, "a")
     f.write(msg + "\n")
     print(msg)
     f.close()
-    log_members(filename)
 
 def log_timestamp(filename):
     f = open(filename, "a")
@@ -318,32 +313,22 @@ def log_timestamp(filename):
     print(msg)
     f.close()
 
-def log_coordinator(filename):
-    global coordinator
+def log_members(filename):
+    global MyNode
     f = open(filename, "a")
     tab = "    "
-    msg = tab + "[COORDINATOR]: node" + str(coordinator["id"])
+    dtab = tab + tab
+    msg = "[OVERLAY]: node" + str(MyNode.id)
     f.write(msg + "\n")
     print(msg)
+    for node in MyNode.overlay.nodes:
+        msg = dtab + "node" + str(node) + "[sqn:" +\
+                str(MyNode.overlay.nodes[node]) +\
+                ",t:" + str(MyNode.overlay.last_msg[node]) + "]: "+\
+                str(MyNode.overlay.edges[node])
+        f.write(msg + "\n")
+        print(msg)
     f.close()
-
-def log_members(filename):
-    global is_coordinator, members
-    f = open(filename, "a")
-    tab = "    "
-    msg = tab + "[MEMBERS]: ["
-    is_empty = True
-    # Make copy of members since another thread may change it 
-    for nodeID, node in copy.deepcopy(members).items():
-        if not is_empty:
-            msg = msg + ", "
-        msg = msg + "node" + str(nodeID)
-        is_empty = False
-    msg = msg + "]"
-    f.write(msg + "\n ")
-    print(msg)
-    f.close()
-    log_exception("INFO", "My id: node" + str(my_id))
 
 def log_latency(nodeID, new_latency):
     global pings, my_id, LATENCY_FILE
@@ -370,7 +355,7 @@ def log_exception(info, exception):
     f = open(EXCEPTION_FILE, "a")
     msg = time.strftime("%Y/%m/%d %H:%M:%S") + ": " + info + "\n"
     msg = msg + "    " + str(exception)
-    #print(msg)
+    print(msg)
     f.write(msg + "\n")
     f.close()
 
@@ -385,12 +370,11 @@ def log(data): # Data is dict
 # the reactor through LoopingCall)
 def measure_latency():
     global MyNode
-    print("MEASURE LATENCY")
+    log_status("MEASURE LATENCY")
     print(MyNode.neighbourhood.nodes)
     for nodeID, node in MyNode.neighbourhood.nodes.items():
         if "host" in node:
             addr = node["host"]
-            print(addr)
             protocol = UDPClient(addr, node)
             reactor.listenUDP(0, protocol)
 
@@ -401,10 +385,9 @@ def measure_latency():
 def client_heartbeat():
     global MyNode
     # send heartbeat msg to all neighbours
-    print("Client Heartbeat")
+    log_status("Client Heartbeat")
     msg = {"command":"heartbeat","source":MyNode.id,\
             "sequence":MyNode.get_sqn(),"neighbours":{1:0.12}}
-    print(msg)
     for nodeID, node in MyNode.neighbourhood.nodes.items():
         if "host" in node:
             send_msg(node, msg)
