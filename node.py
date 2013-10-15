@@ -285,7 +285,7 @@ def send_msg(address, msg):
     return factory.deferred
 
 def error_callback(s):
-    log_exception("Callback", str(s))
+    log("Error", "Error in sending message: %s " % str(s))
 
 # Log functions
 
