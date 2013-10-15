@@ -370,11 +370,14 @@ def log_exception(info, exception):
     f.write(msg + "\n")
     f.close()
 
-# Data is dict of form {"event" : "exception" / "log_pings" / "whatever", 
-# "desc" : "long_log_description" }
+# Events
+# Desc
 # No linebreaks!
-def log(data): 
+def log(event, desc): 
     global MyNode
+    data = dict()
+    data["event"] = event
+    data["desc"] = desc
     data["time"] = time.strftime("%H:%M:%S")
     data["command"] = "log_msg"
     data["id"] = MyNode.id
