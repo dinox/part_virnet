@@ -50,20 +50,20 @@ class MonitorService(object):
 
     def Log(self, data):
         if not "id" in data:
-            return message("error", {"reason" : "id not in log message"})
+            return self.message("error", {"reason" : "id not in log message"})
         if not "time" in data:
-            return message("error", {"reason" : "time not in log message"})
+            return self.message("error", {"reason" : "time not in log message"})
         if not "event" in data:
-            return message("error", {"reason" : "event not in log message"})
+            return self.message("error", {"reason" : "event not in log message"})
         if not "desc" in data:
-            return message("error", {"reason" : "desc not in log message"})
+            return self.message("error", {"reason" : "desc not in log message"})
         Logger.log(data["time"], data["id"], data["event"], data["desc"])
-        return message("ok")
-    @staticmethod
-    def message(command):
-        return message(command, {})
-    @staticmethod
-    def message(command, d):
+        return self.message("ok")
+
+    def message(self, command):
+        return self.message(command, {})
+
+    def message(self, command, d):
         d["command"] = command
         return json.dumps(d)
 
