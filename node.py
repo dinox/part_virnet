@@ -295,7 +295,7 @@ def log_lookup(node, address):
     log_timestamp(filename)
     tab = "    "
     msg = tab + "[LOOKUP]: node" + str(node) + "->" + address["host"]+\
-            + ":" + str(address["port"])
+            ":" + str(address["port"])
     f = open(filename, "a")
     f.write(msg + "\n")
     print(msg)
