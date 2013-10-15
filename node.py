@@ -20,10 +20,10 @@ class Node(object):
     tcp_port = 13337
     udp_port = 13338
 
-    def get_node():
-        return {"host" : host,
-                "udp_port" : udp_port,
-                "tcp_port" : tcp_port}
+    def get_node(self):
+        return {"host" : self.host,
+                "udp_port" : self.udp_port,
+                "tcp_port" : self.tcp_port}
 
     def get_sqn(self):
         self.my_sqn = self.my_sqn + 1
@@ -47,8 +47,11 @@ def parse_args():
     help = "The id number for this node. Default to 0."
     parser.add_option('--id', type='int', help=help)
 
-    help = "The port to listen on. Default to a random available port."
-    parser.add_option('--port', type='int', help=help)
+    help = "The tcp port to listen on. Default to a random available port."
+    parser.add_option('--tport', type='int', help=help)
+
+    help = "The udp port to listen on. Default to a random available port."
+    parser.add_option('--uport', type='int', help=help)
 
     help = "The interface to listen on."
     parser.add_option('--iface', help=help)
@@ -72,7 +75,7 @@ def parse_args():
         if not port.isdigit():
             parser.error('Ports must be integers.')
 
-        return {"host" : host, "port" : int(port)}
+        return {"host" : host, "tcp_port" : int(port)}
 
     return options, parse_address(address[0])
 
@@ -246,7 +249,7 @@ class UDPClient(DatagramProtocol):
 
     def __init__(self, addr, node):
         self.host = addr["host"]
-        self.port = addr["port"]+1
+        self.port = addr["udp_port"]
         self.node = node
 
     def startProtocol(self):
@@ -277,7 +280,7 @@ def send_msg(address, msg):
     service = ClientService()
     factory = NodeClientFactory(service, msg)
     factory.deferred.addErrback(error_callback)
-    reactor.connectTCP(address["host"], address["port"], factory)
+    reactor.connectTCP(address["host"], address["tcp_port"], factory)
     return factory.deferred
 
 def error_callback(s):
@@ -307,7 +310,7 @@ def log_lookup(node, address):
     log_timestamp(filename)
     tab = "    "
     msg = tab + "[LOOKUP]: node" + str(node) + "->" + address["host"]+\
-            ":" + str(address["port"])
+            ":" + str(address["tcp_port"])
     f = open(filename, "a")
     f.write(msg + "\n")
     print(msg)
@@ -408,7 +411,7 @@ def init_with_monitor(monitor, node, my_id):
     service = ClientService()
     factory = NodeClientFactory(service, {"command" : "map", "id" : my_id, 
                                             "node" : node})
-    reactor.connectTCP(monitor["host"], monitor["port"], factory)
+    reactor.connectTCP(monitor["host"], monitor["tcp_port"], factory)
     return factory.deferred
 
 
@@ -430,13 +433,13 @@ def main():
             str(MyNode.host)+":"+str(MyNode.tcp_port))
 
     # initialize UDP socket
-    port = reactor.listenUDP(MyNode.udp_port, UDPServer(), interface=MyNode.host)
-    print 'Listening on %s.' % (port.getHost())
+    listen_udp = reactor.listenUDP(MyNode.udp_port, UDPServer(), interface=MyNode.host)
+    print 'Listening on %s.' % (listen_udp.getHost())
 
     service = ClientService()
     factory = NodeServerFactory(service)
-    port = reactor.listenTCP(MyNode.tcp_port, factory, interface=MyNode.host)
-    print 'Listening on %s.' % (port.getHost())
+    listen_tcp = reactor.listenTCP(MyNode.tcp_port, factory, interface=MyNode.host)
+    print 'Listening on %s.' % (listen_tcp.getHost())
 
     # initialize Neighbourhood
     MyNode.overlay = Overlay()
