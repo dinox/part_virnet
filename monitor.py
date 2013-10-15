@@ -59,10 +59,10 @@ class MonitorService(object):
             return message("error", {"reason" : "desc not in log message"})
         Logger.log(data["time"], data["id"], data["event"], data["desc"])
         return message("ok")
-
+    @staticmethod
     def message(command):
         return message(command, {})
-
+    @staticmethod
     def message(command, d):
         d["command"] = command
         return json.dumps(d)
