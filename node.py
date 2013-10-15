@@ -435,6 +435,7 @@ def main():
     # initialize UDP socket
     listen_udp = reactor.listenUDP(MyNode.udp_port, UDPServer(), interface=MyNode.host)
     print 'Listening on %s.' % (listen_udp.getHost())
+    (_, _, MyNode.udp_port) = listen_udp.getHost().
 
     service = ClientService()
     factory = NodeServerFactory(service)
