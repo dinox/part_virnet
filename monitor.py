@@ -18,6 +18,7 @@ def parse_args():
     return options
 
 class Logger(object):
+    @staticmethod
     def log(time, id, event, desc):
         print "[%s] node%s: %s: %s" % (time, id, event, desc)
 
@@ -48,7 +49,6 @@ class MonitorService(object):
                             "message"})
 
     def Log(self, data):
-        global logger
         if not "id" in data:
             return message("error", {"reason" : "id not in log message"})
         if not "time" in data:
