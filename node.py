@@ -431,7 +431,6 @@ def main():
     print 'Listening on %s.' % (port.getHost())
 
     # initialize Neighbourhood
-    init_neighbourhood_dummy([0,1])
     MyNode.overlay = Overlay()
 
     d = init_with_monitor(MyNode.monitor,\
