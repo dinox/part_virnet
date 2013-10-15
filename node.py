@@ -93,8 +93,9 @@ class Neighbourhood(object):
     def lookup(self):
         global MyNode
         from twisted.internet import reactor
-        for node in self.nodes.keys():
-            send_msg(MyNode.monitor, {"command" : "lookup", "id" : node})
+        for nodeID, node in self.nodes.items():
+            if "host" not in node:
+                send_msg(MyNode.monitor, {"command" : "lookup", "id" : nodeID})
 
 
     def add_node():
@@ -369,12 +370,14 @@ def log_exception(info, exception):
     f.write(msg + "\n")
     f.close()
 
-def log(data): # Data is dict
+def log(data): 
+    # Data is dict of form {"time" : "HH:MM:SS", "event" :
+    # "exception" / "log_pings" / "whatever", "desc" : "long_log_description" }
+    # No linebreaks!
     global MyNode
     data["command"] = "log_msg"
     data["id"] = MyNode.id
     send_msg(MyNode.monitor, data)
-
 
 #Ping call to measure the latency (called periodically by
 # the reactor through LoopingCall)

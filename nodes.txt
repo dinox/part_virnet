@@ -5,9 +5,9 @@
 5:righthand.eecs.harvard.edu
 6:planetlab-01.bu.edu
 7:planetlab-01.ece.uprm.edu
-8:planetlab9.millennium.berkeley.edu
+8:planetlab1.cs.cornell.edu
 9:plab3.eece.ksu.edu
-10:planetlab2.csee.usf.edu
+10:planetlab1.uta.edu
 11:plab1.cs.ust.hk
 12:planetslug5.cse.ucsc.edu
 13:csplanetlab3.kaist.ac.kr
