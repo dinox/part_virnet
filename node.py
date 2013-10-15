@@ -46,6 +46,8 @@ def parse_args():
     help = "The interface to listen on."
     parser.add_option('--iface', help=help)
 
+    help = "The node's neighbourhood, formatted as json list"
+    parser.add_option('--neighbours', help=help)
 
     options, address = parser.parse_args()
 
@@ -68,22 +70,24 @@ def parse_args():
     return options, parse_address(address[0])
 
 class Neighbourhood(object):
-    nodes = []
-    addresses = dict()
+    nodes = dict()
     pings = dict()
 
     def __init__(self, vir_nodes):
         global MyNode
         for node in vir_nodes:
             if not node == MyNode.id:
-                self.nodes.append(node)
+                self.nodes[node] = {}
         self.lookup()
 
     def lookup(self):
         global MyNode
         from twisted.internet import reactor
-        for node in self.nodes:
+        for node in self.nodes.keys():
             send_msg(MyNode.monitor, {"command" : "lookup", "id" : node})
+
+
+    def add_node():
         log_status("Neighbourhood lookup")
 
 class Overlay(object):
@@ -115,7 +119,7 @@ class ClientService(object):
     def DNS_Reply(self, reply):
         global MyNode
         if "node" in reply:
-            MyNode.neighbourhood.addresses[reply["id"]] = reply["node"]
+            MyNode.neighbourhood.nodes[reply["id"]] = reply["node"]
         else:
             print "DNS reply did not contain node data"
 
@@ -130,8 +134,8 @@ class ClientService(object):
         if MyNode.overlay.is_valid_msg(reply):
             MyNode.overlay.update_node(reply["source"], reply["neighbours"],
                     reply["sequence"])
-            for nodeID in MyNode.neighbourhood.addresses:
-                send_msg(MyNode.neighbourhood.addresses[nodeID], reply)
+            for nodeID in MyNode.neighbourhood.nodes.keys():
+                send_msg(MyNode.neighbourhood.nodes[nodeID], reply)
             print("Heartbeat message received")
             print(MyNode.overlay.nodes)
             print(MyNode.overlay.last_msg)
@@ -272,6 +276,7 @@ def send_msg(address, msg):
     factory = NodeClientFactory(service, msg)
     factory.deferred.addErrback(error_callback)
     reactor.connectTCP(address["host"], address["port"], factory)
+    return factory.deferred
 
 def error_callback(s):
     log_exception("Callback", str(s))
@@ -369,29 +374,25 @@ def log_exception(info, exception):
     f.write(msg + "\n")
     f.close()
 
+def log(data): # Data is dict
+    global MyNode
+    data["command"] = "log_msg"
+    data["id"] = MyNode.id
+    send_msg(MyNode.monitor, data)
 
-def init_with_monitor(monitor, node, my_id):
-    """
-    Register our DNS data and id_nbr with the monitor at host:port.
-    """
-    from twisted.internet import reactor
-    service = ClientService()
-    factory = NodeClientFactory(service, {"command" : "map", "id" : my_id, 
-                                            "node" : node})
-    reactor.connectTCP(monitor["host"], monitor["port"], factory)
-    return factory.deferred
 
 #Ping call to measure the latency (called periodically by
 # the reactor through LoopingCall)
 def measure_latency():
     global MyNode
     print("MEASURE LATENCY")
-    print(MyNode.neighbourhood.addresses)
-    for node in MyNode.neighbourhood.addresses:
-        addr = MyNode.neighbourhood.addresses[node]
-        print(addr)
-        protocol = UDPClient(addr, node)
-        reactor.listenUDP(0, protocol)
+    print(MyNode.neighbourhood.nodes)
+    for nodeID, node in MyNode.neighbourhood.nodes.items():
+        if "host" in node:
+            addr = node["host"]
+            print(addr)
+            protocol = UDPClient(addr, node)
+            reactor.listenUDP(0, protocol)
 
 # Heartbeat function of the client (called periodically 
 # by the reactor through LoopingCall)
@@ -404,16 +405,21 @@ def client_heartbeat():
     msg = {"command":"heartbeat","source":MyNode.id,\
             "sequence":MyNode.get_sqn(),"neighbours":{1:0.12}}
     print(msg)
-    for nodeID in MyNode.neighbourhood.addresses:
-        send_msg(MyNode.neighbourhood.addresses[nodeID], msg)
+    for nodeID, node in MyNode.neighbourhood.nodes.items():
+        if "host" in node:
+            send_msg(node, msg)
 
 # INITIALIZATION
-
-# create dummy/test neighbourhood, should be replaced with real neighourhood
-# initialization
-def init_neighbourhood_dummy(vir_nodes):
-    global MyNode
-    MyNode.neighbourhood = Neighbourhood(vir_nodes)
+def init_with_monitor(monitor, node, my_id):
+    """
+    Register our DNS data and id_nbr with the monitor at host:port.
+    """
+    from twisted.internet import reactor
+    service = ClientService()
+    factory = NodeClientFactory(service, {"command" : "map", "id" : my_id, 
+                                            "node" : node})
+    reactor.connectTCP(monitor["host"], monitor["port"], factory)
+    return factory.deferred
 
 
 # MAIN
@@ -424,6 +430,8 @@ def main():
     MyNode.id = options.id or 0
     MyNode.host = options.iface or socket.gethostbyname(socket.gethostname())
     MyNode.port = options.port or 13337
+    if options.neighbours:
+        MyNode.neighbourhood = Neighbourhood(json.loads(options.neighbours))
 
     from twisted.internet.task import LoopingCall
 

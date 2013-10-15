@@ -1,6 +1,6 @@
 from plumbum import SshMachine, commands
 from multiprocessing.pool import ThreadPool as Pool
-import time
+import time, json
 
 # Change these
 username = "user13"
@@ -8,6 +8,7 @@ path_to_keyfile = "/Users/erik/.ssh/user13"
 
 nodes = []
 f = open("nodes.txt", "r")
+n = open("neighbourhood.json", "r")
 
 print """ Welcome to the super startup script by
 Erik Henriksson & Christoph Burkhalter. """
@@ -15,6 +16,8 @@ Erik Henriksson & Christoph Burkhalter. """
 for line in f:
     s = line.strip().split(":")
     nodes.append({"id" : s[0], "host" : s[1]})
+
+neighbourhood = json.loads(n.read())
 
 def start_node(node):
     print "Connecting to node%s with hostname %s." % (node["id"], node["host"])
@@ -49,7 +52,8 @@ def start_node(node):
     print "[%s]Starting python node..." % node["id"]
     try:
         print remote["./python2.7-static"]("node.py", 
-                "--id", "%s" % (node["id"]), "--port", "12235", "erikhenriksson.se:12345")
+                "--id", "%s" % (node["id"]), "--port", "12235", "--neighbourhood", 
+                json.dumps(neighbourhood[node["id"]]), "erikhenriksson.se:12345")
     except commands.processes.ProcessExecutionError as e:
         print "[%s]Got an exception: %s" % (node["id"], e)
     remote.close()
