@@ -17,6 +17,13 @@ class Node(object):
     my_sqn = 0
     neighbourhood = None
     overlay = None
+    tcp_port = 13337
+    udp_port = 13338
+
+    def get_node():
+        return {"host" : host,
+                "udp_port" : udp_port,
+                "tcp_port" : tcp_port}
 
     def get_sqn(self):
         self.my_sqn = self.my_sqn + 1
@@ -412,29 +419,30 @@ def main():
     options, MyNode.monitor = parse_args()
     MyNode.id = options.id or 0
     MyNode.host = options.iface or socket.gethostbyname(socket.gethostname())
-    MyNode.port = options.port or 13337
+    MyNode.tcp_port = options.tport or 0
+    MyNode.udp_port = options.uport or 0
     if options.neighbours:
         MyNode.neighbourhood = Neighbourhood(json.loads(options.neighbours))
 
     from twisted.internet.task import LoopingCall
 
-    log_status("Startup node" + str(MyNode.id) + " with address " +\
-            str(MyNode.host)+":"+str(MyNode.port))
+    log_status("Startup node" + str(MyNode.id) + " with tcp address " +\
+            str(MyNode.host)+":"+str(MyNode.tcp_port))
 
     # initialize UDP socket
-    port = reactor.listenUDP(MyNode.port+1, UDPServer(), interface=MyNode.host)
+    port = reactor.listenUDP(MyNode.udp_port, UDPServer(), interface=MyNode.host)
     print 'Listening on %s.' % (port.getHost())
 
     service = ClientService()
     factory = NodeServerFactory(service)
-    port = reactor.listenTCP(MyNode.port, factory, interface=MyNode.host)
+    port = reactor.listenTCP(MyNode.tcp_port, factory, interface=MyNode.host)
     print 'Listening on %s.' % (port.getHost())
 
     # initialize Neighbourhood
     MyNode.overlay = Overlay()
 
     d = init_with_monitor(MyNode.monitor,\
-            {"host":MyNode.host,"port":MyNode.port}, MyNode.id)
+            MyNode.get_node(), MyNode.id)
 
     # refresh addresses periodically
     LoopingCall(MyNode.neighbourhood.lookup).start(30)
