@@ -389,6 +389,7 @@ def measure_latency():
     global MyNode
     log_status("MEASURE LATENCY")
     print(MyNode.neighbourhood.nodes)
+    log("Measure latency", str(MyNode.neighbourhood.nodes))
     for nodeID, node in MyNode.neighbourhood.nodes.items():
         if "host" in node:
             addr = node["host"]

@@ -25,6 +25,10 @@ class Logger(object):
     def log(time, id, event, desc):
         print "[%s] node%s: %s: %s" % (time, id, event, desc)
 
+    @staticmethod
+    def log_self(event, desc):
+        Logger.log(time.strftime("%H:%M:%S"), "Monitor", event, desc)
+
 class Monitor(object):
     nodes = {}
 
@@ -47,6 +51,7 @@ class MonitorService(object):
                 self.monitor.nodes[data["id"]] = data["node"]
             except:
                 return json.dumps({"command" : "error", "reason" : ""})
+            Logger.log_self("New node", "Added node%s to DNS list" % data["id"])
             return json.dumps({"command" : "ok"})
         return json.dumps({"command" : "error", "reason" : "No id or no node in " +
                             "message"})
