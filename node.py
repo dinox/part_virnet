@@ -285,7 +285,7 @@ def send_msg(address, msg):
     return factory.deferred
 
 def error_callback(s):
-    log("Error", "Error in sending message: %s " % str(s))
+    log("Debug", "Error in sending message: %s " % str(s))
 
 # Log functions
 
@@ -370,9 +370,9 @@ def log_exception(info, exception):
     f.write(msg + "\n")
     f.close()
 
-# Events
-# Desc
-# No linebreaks!
+# Monitor logger function
+# No linebreaks in event or desc!
+# If event == "Debug" it is only shown when monitor is in debug mode.
 def log(event, desc): 
     global MyNode
     data = dict()
@@ -389,7 +389,9 @@ def measure_latency():
     global MyNode
     log_status("MEASURE LATENCY")
     print(MyNode.neighbourhood.nodes)
-    log("Measure latency", str(MyNode.neighbourhood.nodes))
+#TODO: Add something funnier than a empty string here (but dont clutter down the
+#      log window
+    log("Measure latency", "")
     for nodeID, node in MyNode.neighbourhood.nodes.items():
         if "host" in node:
             addr = node["host"]

@@ -23,7 +23,11 @@ def parse_args():
 class Logger(object):
     @staticmethod
     def log(time, id, event, desc):
-        print "[%s] node%s: %s: %s" % (time, id, event, desc)
+        global is_debug_mode
+        if id != "Monitor":
+            id = "node%s" % id
+        if event != "Debug" or is_debug_mode: 
+            print "[%s] %s: %s: %s" % (time, id, event, desc)
 
     @staticmethod
     def log_self(event, desc):

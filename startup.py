@@ -5,6 +5,10 @@ import time, json
 # Change these
 username = "user13"
 path_to_keyfile = "/Users/erik/.ssh/user13"
+p = open("startup_config.json", "r")
+conf = json.loads(p.read())
+username = conf["username"]
+path_to_keyfile = conf["path_to_keyfile"]
 
 nodes = []
 f = open("nodes.txt", "r")
@@ -53,7 +57,7 @@ def start_node(node):
     try:
         print remote["./python2.7-static"]("node.py", 
                 "--id", "%s" % (node["id"]), "--neighbours", 
-                json.dumps(neighbourhood[node["id"]]), "erikhenriksson.se:12349")
+                json.dumps(neighbourhood[node["id"]]), "erikhenriksson.se:12351")
     except commands.processes.ProcessExecutionError as e:
         print "[%s]Got an exception: %s" % (node["id"], e)
     remote.close()
