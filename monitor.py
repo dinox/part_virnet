@@ -17,6 +17,10 @@ def parse_args():
 
     return options
 
+class Logger(object):
+    def log(time, id, event, desc):
+        print "[%s] node%s: %s: %s" % (time, id, event, desc)
+
 class Monitor(object):
     nodes = {}
 
@@ -43,8 +47,30 @@ class MonitorService(object):
         return json.dumps({"command" : "error", "reason" : "No id or no node in " +
                             "message"})
 
+    def Log(self, data):
+        global logger
+        if not "id" in data:
+            return message("error", {"reason" : "id not in log message"})
+        if not "time" in data:
+            return message("error", {"reason" : "time not in log message"})
+        if not "event" in data:
+            return message("error", {"reason" : "event not in log message"})
+        if not "desc" in data:
+            return message("error", {"reason" : "desc not in log message"})
+        Logger.log(data["time"], data["id"], data["event"], data["desc"])
+        return message("ok")
+
+    def message(command):
+        return message(command, {})
+
+    def message(command, d):
+        d["command"] = command
+        return json.dumps(d)
+
+
     commands = { "lookup"   : DNS_Lookup,
-                 "map"      : DNS_Map   }
+                 "map"      : DNS_Map   ,
+                 "log_msg"  : Log           }
 
 class MonitorProtocol(NetstringReceiver):
     def stringReceived(self, request):

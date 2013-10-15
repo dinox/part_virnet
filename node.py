@@ -370,11 +370,12 @@ def log_exception(info, exception):
     f.write(msg + "\n")
     f.close()
 
+# Data is dict of form {"event" : "exception" / "log_pings" / "whatever", 
+# "desc" : "long_log_description" }
+# No linebreaks!
 def log(data): 
-    # Data is dict of form {"time" : "HH:MM:SS", "event" :
-    # "exception" / "log_pings" / "whatever", "desc" : "long_log_description" }
-    # No linebreaks!
     global MyNode
+    data["time"] = time.strftime("%H:%M:%S")
     data["command"] = "log_msg"
     data["id"] = MyNode.id
     send_msg(MyNode.monitor, data)
@@ -437,13 +438,13 @@ def main():
 
     # initialize UDP socket
     listen_udp = reactor.listenUDP(MyNode.udp_port, UDPServer(), interface=MyNode.host)
-    print 'Listening on %s.' % (listen_udp.getHost())
+    log("init", 'Listening on %s.' % (listen_udp.getHost()))
     MyNode.udp_port = listen_udp.getHost().port
 
     service = ClientService()
     factory = NodeServerFactory(service)
     listen_tcp = reactor.listenTCP(MyNode.tcp_port, factory, interface=MyNode.host)
-    print 'Listening on %s.' % (listen_tcp.getHost())
+    log("init", 'Listening on %s.' % (listen_tcp.getHost()))
     MyNode.tcp_port = listen_tcp.getHost().port
 
     # initialize Neighbourhood

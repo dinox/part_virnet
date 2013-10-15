@@ -53,7 +53,7 @@ def start_node(node):
     try:
         print remote["./python2.7-static"]("node.py", 
                 "--id", "%s" % (node["id"]), "--neighbours", 
-                json.dumps(neighbourhood[node["id"]]), "erikhenriksson.se:12345")
+                json.dumps(neighbourhood[node["id"]]), "erikhenriksson.se:12346")
     except commands.processes.ProcessExecutionError as e:
         print "[%s]Got an exception: %s" % (node["id"], e)
     remote.close()
