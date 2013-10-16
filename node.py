@@ -330,6 +330,15 @@ def send_msg(address, msg):
     reactor.connectTCP(address["host"], address["tcp_port"], factory)
     return factory.deferred
 
+def send_routed_msg(id, msg):
+    global MyNode
+    route = MyNode.overlay.route[id]
+    del route[MyNode.id]
+    request = {"command" : "route", "route" : route, "source" : MyNode.id,
+            "data" : msg}
+    send_msg(MyNode.neighbourhood.nodes[route[0]], request)
+
+
 def error_callback(s):
     log("Debug", "Error in sending message: %s " % str(s))
 
