@@ -135,27 +135,33 @@ class Overlay(object):
         v = dict()                  # initialise set with unvisited nodes
         for node in self.nodes:
             self.dist[node] = INF
+            self.route[node] = []
             v[node] = 1
         self.dist[MyNode.id] = 0    # add myself
-        print(self.dist)
+        self.route[MyNode.id] = []
         v[MyNode.id] = 1
         min_dist_id = MyNode.id     # set start node to myself
         min_dist_value = 0
         while len(v) > 0:           # while unvisited nodes
             min_dist_value = INF
             c = min_dist_id         # current selected node
-            print(" C:" + str(c))
+            print(self.edges[c])
             for (key,val) in self.edges[c].iteritems():
-                print("key,val:" + str(key) + "," + str(val))
                 if key in v:          # check all edges to unvisited nodes
-                    self.dist[key] = min(self.dist[key],self.dist[c]+val)
+                    if self.dist[c]+val < self.dist[key]:
+                        self.dist[key] = self.dist[c]+val
+                        self.route[key] = self.route[c][:]
+                        self.route[key].append(c)
                     if self.dist[key] < min_dist_value:
                         min_dist_value = self.dist[key]
                         min_dist_id = key
             del v[c]
+            if c == min_dist_id:
+                # other nodes not reachable, finished
+                v = dict()
         print("DIJKSTRA FINISHED!")
         print(self.dist)
-        #print(self.route)
+        print(self.route)
 
 
 class ClientService(object):
@@ -297,13 +303,16 @@ class UDPClient(DatagramProtocol):
     def datagramReceived(self, datagram, host):
         global MyNode
         s = datagram.split(":")
-        t = time.time() - float(s[1])
+        t = self.time() - int(s[1])
         MyNode.neighbourhood.pings[int(s[0])] = t
 #TODO: log pings
 
     def sendDatagram(self):
-        msg = str(self.node)+":"+str(time.time())
-        self.transport.write(msg)
+        msg = str(self.node)+":"+str(self.time())
+        self.transport.write(msg, (self.host, self.port))
+
+    def time(self):
+        return int(round(time.time() * 10000))
 
 # Ping request
 
