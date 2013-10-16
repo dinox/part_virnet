@@ -105,11 +105,17 @@ class Overlay(object):
     nodes = dict()
     last_msg = dict()
     edges = dict()
+    dist = dict()
+    route = dict()
+
+    def __init__(self):
+        self.edges[MyNode.id] = dict()
 
     def update_node(self, node, neighbours, sqn):
         self.nodes[node] = sqn
         self.last_msg[node] = time.time()
         self.edges[node] = neighbours
+        self.dijkstra_dist()
 
     def is_valid_msg(self, msg):
         if msg["source"] == MyNode.id:
@@ -120,6 +126,36 @@ class Overlay(object):
             return True
         else:
             return False
+
+    def dijkstra_dist(self):
+        self.edges[MyNode.id] = MyNode.neighbourhood.pings
+        INF = 1000.0                # infinity value
+        self.dist = dict()          # reset distances
+        self.route = dict()         # reset routes
+        v = dict()                  # initialise set with unvisited nodes
+        for node in self.nodes:
+            self.dist[node] = INF
+            v[node] = 1
+        self.dist[MyNode.id] = 0    # add myself
+        print(self.dist)
+        v[MyNode.id] = 1
+        min_dist_id = MyNode.id     # set start node to myself
+        min_dist_value = 0
+        while len(v) > 0:           # while unvisited nodes
+            min_dist_value = INF
+            c = min_dist_id         # current selected node
+            print(" C:" + str(c))
+            for (key,val) in self.edges[c].iteritems():
+                print("key,val:" + str(key) + "," + str(val))
+                if key in v:          # check all edges to unvisited nodes
+                    self.dist[key] = min(self.dist[key],self.dist[c]+val)
+                    if self.dist[key] < min_dist_value:
+                        min_dist_value = self.dist[key]
+                        min_dist_id = key
+            del v[c]
+        print("DIJKSTRA FINISHED!")
+        print(self.dist)
+        #print(self.route)
 
 
 class ClientService(object):
@@ -261,7 +297,8 @@ class UDPClient(DatagramProtocol):
     def datagramReceived(self, datagram, host):
         global MyNode
         s = datagram.split(":")
-        MyNode.neighbourhood.pings[int(s[0])] = float(s[1])
+        t = time.time() - float(s[1])
+        MyNode.neighbourhood.pings[int(s[0])] = t
 #TODO: log pings
 
     def sendDatagram(self):
@@ -407,7 +444,8 @@ def client_heartbeat():
     # send heartbeat msg to all neighbours
     log_status("Client Heartbeat")
     msg = {"command":"heartbeat","source":MyNode.id,\
-            "sequence":MyNode.get_sqn(),"neighbours":{1:0.12}}
+            "sequence":MyNode.get_sqn(),"neighbours":\
+            MyNode.neighbourhood.pings}
     for nodeID, node in MyNode.neighbourhood.nodes.items():
         if "host" in node:
             send_msg(node, msg)
