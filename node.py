@@ -146,8 +146,9 @@ class ClientService(object):
         if MyNode.overlay.is_valid_msg(reply):
             MyNode.overlay.update_node(reply["source"], reply["neighbours"],
                     reply["sequence"])
-            for nodeID in MyNode.neighbourhood.nodes.keys():
-                send_msg(MyNode.neighbourhood.nodes[nodeID], reply)
+            for nodeID,node in MyNode.neighbourhood.nodes.items():
+                if "host" in node:
+                    send_msg(node, reply)
             log_overlay()
 
     commands = {"ok"    : OK,
@@ -394,8 +395,7 @@ def measure_latency():
     log("Measure latency", "")
     for nodeID, node in MyNode.neighbourhood.nodes.items():
         if "host" in node:
-            addr = node["host"]
-            protocol = UDPClient(addr, node)
+            protocol = UDPClient(node, nodeID)
             reactor.listenUDP(0, protocol)
 
 # Heartbeat function of the client (called periodically 
@@ -436,6 +436,8 @@ def main():
     MyNode.udp_port = options.uport or 0
     if options.neighbours:
         MyNode.neighbourhood = Neighbourhood(json.loads(options.neighbours))
+    else:
+        MyNode.neighbourhood = Neighbourhood([0,1,2])
 
     from twisted.internet.task import LoopingCall
 
