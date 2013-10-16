@@ -45,19 +45,19 @@ def parse_args():
     parser = optparse.OptionParser(usage)
 
     help = "The id number for this node. Default to 0."
-    parser.add_option('--id', type='int', help=help)
+    parser.add_option('-i', '--id', type='int', help=help)
 
     help = "The tcp port to listen on. Default to a random available port."
-    parser.add_option('--tport', type='int', help=help)
+    parser.add_option('-t', '--tport', type='int', help=help)
 
     help = "The udp port to listen on. Default to a random available port."
-    parser.add_option('--uport', type='int', help=help)
+    parser.add_option('-u', '--uport', type='int', help=help)
 
     help = "The interface to listen on."
     parser.add_option('--iface', help=help)
 
     help = "The node's neighbourhood, formatted as json list"
-    parser.add_option('--neighbours', help=help)
+    parser.add_option('-n', '--neighbours', help=help)
 
     options, address = parser.parse_args()
 
@@ -248,10 +248,10 @@ class UDPClient(DatagramProtocol):
     port = 0
     node = 0
 
-    def __init__(self, addr, node):
-        self.host = addr["host"]
-        self.port = addr["udp_port"]
-        self.node = node
+    def __init__(self, node, nodeID):
+        self.host = node["host"]
+        self.port = node["udp_port"]
+        self.nodeID = nodeID
 
     def startProtocol(self):
         self.transport.connect(self.host, self.port)
@@ -264,7 +264,7 @@ class UDPClient(DatagramProtocol):
 #TODO: log pings
 
     def sendDatagram(self):
-        msg = str(self.node)+":"+str(time.time())
+        msg = str(self.nodeID)+":"+str(time.time())
         self.transport.write(msg)
 
 # Ping request
@@ -391,11 +391,12 @@ def measure_latency():
     print(MyNode.neighbourhood.nodes)
 #TODO: Add something funnier than a empty string here (but dont clutter down the
 #      log window
-    log("Measure latency", "")
+    log("Measure latency", "Sending ping to %d neighbours: %s" %
+            (len(MyNode.neighbourhood.nodes),
+                str(MyNode.neighbourhood.nodes.keys())))
     for nodeID, node in MyNode.neighbourhood.nodes.items():
         if "host" in node:
-            addr = node["host"]
-            protocol = UDPClient(addr, node)
+            protocol = UDPClient(node, nodeID)
             reactor.listenUDP(0, protocol)
 
 # Heartbeat function of the client (called periodically 
