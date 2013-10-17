@@ -150,7 +150,7 @@ def main():
             if node > time.time() + 30:
                 nodes.add(nodeID)
         Logger.log_self("status", "Alive nodes: %s %d/%d" % (str(nodes),
-                        len(nodes), len(monitor.nodes))
+                        len(nodes), len(monitor.nodes)))
 
     LoopingCall(alive_nodes).start(10)
 
