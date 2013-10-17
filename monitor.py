@@ -1,6 +1,7 @@
 import optparse, os, json, traceback, time
 from twisted.internet.protocol import ServerFactory, Protocol
 from twisted.protocols.basic import NetstringReceiver
+from twisted.internet.task import LoopingCall
 
 def parse_args():
     usage = """usage: %prog [options]"""
