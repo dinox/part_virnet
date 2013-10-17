@@ -116,6 +116,7 @@ class Overlay(object):
         self.last_msg[node] = time.time()
         self.edges[node] = neighbours
         self.dijkstra_dist()
+        log("routing table", str(self.route))
 
     def is_valid_msg(self, msg):
         if msg["source"] == MyNode.id:
@@ -469,6 +470,13 @@ def client_heartbeat():
         if "host" in node:
             send_msg(node, msg)
 
+# So we can know if the node is alive
+def monitor_heartbeat():
+    global MyNode
+    msg = {"command":"heartbeat","source":MyNode.id}
+    send_msg(MyNode.monitor, msg)
+ 
+
 # INITIALIZATION
 def init_with_monitor(monitor, node, my_id):
     """
@@ -518,10 +526,17 @@ def main():
     d = init_with_monitor(MyNode.monitor,\
             MyNode.get_node(), MyNode.id)
 
+    def monitor_not_reachable(_):
+        print "Monitor not reachable!"
+        reactor.stop()
+
+    d.addErrback(monitor_not_reachable)
+
     # refresh addresses periodically
     LoopingCall(MyNode.neighbourhood.lookup).start(30)
     LoopingCall(client_heartbeat).start(20)
     LoopingCall(measure_latency).start(5)
+    LoopingCall(monitor_heartbeat).start(5)
 
     reactor.run()
 
