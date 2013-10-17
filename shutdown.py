@@ -37,6 +37,6 @@ def start_node(node):
         print "[%s]Python could not get killed" % node["id"]
     remote.close()
 
-pool_size = 3  # your "parallelness"
+pool_size = 15  # your "parallelness"
 pool = Pool(pool_size)
 pool.map(start_node, nodes)
