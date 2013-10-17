@@ -40,6 +40,7 @@ class MonitorService(object):
 
     def __init__(self, monitor):
         self.monitor = monitor
+        self.pings = dict()
 
     def DNS_Lookup(self, data):
         if "id" in data and data["id"] in self.monitor.nodes:
@@ -75,9 +76,15 @@ class MonitorService(object):
         Logger.log(data["time"], data["id"], data["event"], data["desc"])
         return message("ok", {})
 
+    def Heartbeat(self, data):
+        if "id" in data:
+            self.pings[data["id"]] = time.time()
+        return json.dumps({"command" : "ok"})
+
     commands = { "lookup"   : DNS_Lookup,
                  "map"      : DNS_Map   ,
-                 "log_msg"  : Log           }
+                 "log_msg"  : Log       ,
+                 "heartbeat": Heartbeat }
 
 class MonitorProtocol(NetstringReceiver):
     def stringReceived(self, request):
@@ -120,6 +127,8 @@ class MonitorFactory(ServerFactory):
             traceback.print_exc()
             return None # command failed
 
+
+
 def main():
     global is_debug_mode
     options = parse_args()
@@ -133,6 +142,17 @@ def main():
                              interface=options.iface)
     if is_debug_mode:
         print 'Listening on %s.' % (port.getHost())
+
+    def alive_nodes():
+        nodes = []
+        for nodeID, node in service.pings.items():
+            if node > time.time() + 30:
+                nodes.add(nodeID)
+        Logger.log_self("status", "Alive nodes: %s %d/%d" % (str(nodes),
+                        len(nodes), len(monitor.nodes))
+
+    LoopingCall(alive_nodes).start(10)
+
     reactor.run()
 
 if __name__ == '__main__':
