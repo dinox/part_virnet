@@ -78,6 +78,7 @@ class MonitorService(object):
         return message("ok", {})
 
     def Heartbeat(self, data):
+        Logger.log_self("Debug", str(data))
         if "id" in data:
             self.pings[data["id"]] = time.time()
         return json.dumps({"command" : "ok"})
@@ -148,7 +149,7 @@ def main():
         nodes = []
         for nodeID, node in service.pings.items():
             if node > time.time() - 30:
-                nodes.add(nodeID)
+                nodes.append(nodeID)
         Logger.log_self("status", "Alive nodes: %s %d/%d" % (str(nodes),
                         len(nodes), len(monitor.nodes)))
 
