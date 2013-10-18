@@ -473,7 +473,7 @@ def client_heartbeat():
 # So we can know if the node is alive
 def monitor_heartbeat():
     global MyNode
-    msg = {"command":"heartbeat","source":MyNode.id}
+    msg = {"command":"heartbeat","id":MyNode.id}
     send_msg(MyNode.monitor, msg)
  
 
