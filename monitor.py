@@ -78,6 +78,7 @@ class MonitorService(object):
         return message("ok", {})
 
     def Heartbeat(self, data):
+        Logger.log_self("Debug", str(data))
         if "id" in data:
             self.pings[data["id"]] = time.time()
         return json.dumps({"command" : "ok"})
