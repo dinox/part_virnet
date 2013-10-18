@@ -148,7 +148,7 @@ def main():
         nodes = []
         for nodeID, node in service.pings.items():
             if node > time.time() - 30:
-                nodes.add(nodeID)
+                nodes.append(nodeID)
         Logger.log_self("status", "Alive nodes: %s %d/%d" % (str(nodes),
                         len(nodes), len(monitor.nodes)))
 

@@ -94,8 +94,7 @@ class Neighbourhood(object):
         global MyNode
         from twisted.internet import reactor
         for nodeID, node in self.nodes.items():
-            if "host" not in node:
-                send_msg(MyNode.monitor, {"command" : "lookup", "id" : nodeID})
+            send_msg(MyNode.monitor, {"command" : "lookup", "id" : nodeID})
 
 
     def add_node():
@@ -194,10 +193,33 @@ class ClientService(object):
                     send_msg(node, reply)
             log_overlay()
 
+    def RoutedMessage(self, pkg):
+        print pkg
+        if "route" in pkg and "data" in pkg:
+            del pkg["route"][0]
+            if len(pkg["route"]) == 1 and pkg["route"][0] in MyNode.neighbourhood.nodes:
+                send_msg(MyNode.neighbourhood.nodes[pkg["route"][0]], pkg["data"])
+            elif pkg["route"][0] in MyNode.neighbourhood.nodes:
+                send_msg(MyNode.neighbourhood.nodes[pkg["route"][0]], pkg)
+            else:
+                print "I do not know %s" % pkg["route"][0]
+                return {"command" : "error", "reason" : "I do not know node%s" %
+                        pkg["route"][0]}
+        else:
+            print "Wrong format"
+            return {"command" : "error", "reason" : "Wrong format"}
+
+    def Debug(self, data):
+        print data
+        log("Debug", "Got debug message: %s" % data)
+
+
     commands = {"ok"    : OK,
                 "error" : Error,
                 "dns_reply" : DNS_Reply,
-                "heartbeat" : Heartbeat }
+                "heartbeat" : Heartbeat,
+                "route"     : RoutedMessage,
+                "debug"     : Debug     }
 
 class ClientProtocol(NetstringReceiver):
 
@@ -235,7 +257,7 @@ class ServerProtocol(NetstringReceiver):
         reply = self.factory.reply(command, data)
 
         if reply is not None:
-            self.sendString(reply)
+            self.sendString(json.dumps(reply))
 
         self.transport.loseConnection()
 
@@ -322,7 +344,7 @@ def send_ping():
         pass
 
 # send TCP message
-
+# msg should contain a command, se ClientService or MonitorService
 def send_msg(address, msg):
     from twisted.internet import reactor
     service = ClientService()
@@ -331,14 +353,19 @@ def send_msg(address, msg):
     reactor.connectTCP(address["host"], address["tcp_port"], factory)
     return factory.deferred
 
+# To send a routed message to node3 via node2 use following:
+# send_routed_msg([2,3], message)
+# Message should contain a command so that node3 knows
+# what to do with it. It is essentially ekvivalent to send_msg method above.
 def send_routed_msg(id, msg):
+    if len(id) == 1:
+        return send_msg(MyNode.neighbourhood.nodes[id[0]], request)
     global MyNode
     route = MyNode.overlay.route[id]
     del route[MyNode.id]
     request = {"command" : "route", "route" : route, "source" : MyNode.id,
             "data" : msg}
     send_msg(MyNode.neighbourhood.nodes[route[0]], request)
-
 
 def error_callback(s):
     log("Debug", "Error in sending message: %s " % str(s))
