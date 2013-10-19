@@ -328,7 +328,7 @@ class UDPClient(DatagramProtocol):
     def datagramReceived(self, datagram, host):
         global MyNode
         s = datagram.split(":")
-        t = self.time() - int(s[1])
+        t = self.time() - float(s[1])
         MyNode.neighbourhood.pings[int(s[0])] = t
 #TODO: log pings
 
