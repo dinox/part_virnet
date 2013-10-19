@@ -162,6 +162,8 @@ class Overlay(object):
         print("DIJKSTRA FINISHED!")
         print(self.dist)
         print(self.route)
+        log("Dijkstra dist", str(self.dist))
+        log("Dijkstra route", str(self.route))
 
 
 class ClientService(object):
