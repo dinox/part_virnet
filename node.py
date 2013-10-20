@@ -134,7 +134,7 @@ class Overlay(object):
             log("error", "Exception in Overlay.delete()")
             traceback.print_exc()
         self.dijkstra_dist()
-        log(state, "node"+node)
+        log("Debug", state+ " node"+node)
         print(state.upper() + " node"+node)
 
     def view(self):
@@ -148,7 +148,7 @@ class Overlay(object):
     def update_node(self, node, neighbours, sqn):
         node = str(node)
         if not node in self.nodes:
-            log("join", "node"+node)
+            log("Debug", "join node"+node)
             print("JOIN node"+node)
         n = MyNode.neighbourhood.nodes
         if node in n and not "host" in n[node]:
@@ -256,7 +256,9 @@ class ClientService(object):
                 if "host" in node:
                     send_msg(node, reply)
             try:
-                log("Debug", "overlay "+ str(MyNode.overlay.view()))
+                msg = {"command" : "overlay_view", "id" : MyNode.id, "nodes":\
+                        str(MyNode.overlay.view())}
+                send_msg(MyNode.monitor, msg)
             except:
                 traceback.print_exc()
 
@@ -303,7 +305,6 @@ class ClientService(object):
 
     def Leave(self, data):
         global MyNode
-        print("YESSSSSSSS**************")
         MyNode.overlay.delete(data["id"], "leave")
 
 
@@ -510,8 +511,8 @@ def alive_heartbeat():
 
 def route_msg_heartbeat():
     global MyNode
-    source = "1"
-    dest = "3"
+    source = MyNode.route_src
+    dest = MyNode.route_dst
     # set the size of the package, switch flag (next time the other size will be
     # sent)
     size = 1000
