@@ -12,18 +12,25 @@ from twisted.protocols.basic import NetstringReceiver
 
 #global variables
 class Node(object):
-    monitor = "undefinded"
-    id = "0"
-    host = '127.0.0.1'
-    my_sqn = 0
-    neighbourhood = None
-    overlay = None
-    tcp_port = 13337
-    udp_port = 13338
-    TIMEOUT = 11
-    HEARTBEAT = 5
-    LOOKUP = 30
-    PING = 20
+    monitor = "undefinded"      # monitor address
+    id = "0"                    # my node id
+    host = '127.0.0.1'          # my address
+    my_sqn = 0                  # sqn, increased with every sent message
+    neighbourhood = None        # neighbourhood object
+    overlay = None              # overlay object
+    tcp_port = 13337            # my tcp port (initialized randomly in main())
+    udp_port = 13338            # my udp port (initialized randomly in main())
+
+    TIMEOUT = 5                 # timeout for nodes of the overlay
+    HEARTBEAT = 2               # heartbeat interval
+    LOOKUP = 30                 # lookup interval
+    PING = 20                   # ping interval
+
+    route_src = 1               # source node of routed msg
+    route_dst = 3               # dest node of routed msg
+    is_small = True             # flag for the size of the routed msg, always
+                                # switched (first send 1kb, then 10kb, then
+                                # 1kb,...)
 
     def get_node(self):
         return {"host" : self.host,
@@ -262,7 +269,8 @@ class ClientService(object):
         global MyNode
         if "source" in data:
             ideal = float(data["ideal"]) + cal_ideal_latency(data["source"])
-            msg = {"command":"reply","time":data["time"],"ideal":ideal,"source":MyNode.id}
+            msg = {"command":"reply","time":data["time"],"ideal":ideal,\
+                    "source":MyNode.id,"size":data["size"]}
             print(msg)
             send_msg_to_node(data["source"], msg)
         else:
@@ -273,8 +281,9 @@ class ClientService(object):
         l = gettime() - int(data["time"])
         l = float(l) / 10
         i = float(data["ideal"]) / 10
-        print("Routed reply received: real "+str(l)+"(ms), ideal "+str(i)+"(ms)")
-        log("routed_msg", "node"+MyNode.id+" to node"+data["source"]+":"+str(l)+\
+        size = "("+str(data["size"])+"kb)"
+        print("Routed reply received "+size+": real "+str(l)+"(ms), ideal "+str(i)+"(ms)")
+        log("routed_msg", "node"+MyNode.id+" to node"+data["source"]+" "+size+":"+str(l)+\
                 " ms (real), "+str(i)+" ms (ideal)")
 
     def Debug(self, data):
@@ -486,12 +495,18 @@ def route_msg_heartbeat():
     global MyNode
     source = "1"
     dest = "3"
+    # set the size of the package, switch flag (next time the other size will be
+    # sent)
+    size = 1000
+    if not MyNode.is_small:
+        size = 10000
+    MyNode.is_small = not MyNode.is_small
+
     if MyNode.id == source and dest in MyNode.overlay.route:
         try:
             log("routed_msg", "Send msg from node"+source+" to node"+dest)
-            k = 'a'*1000
-            msg = {"command":"request_reply","time":str(gettime()),\
-                "load":k,"source":MyNode.id,"ideal":cal_ideal_latency(dest)}
+            msg = {"command":"request_reply","time":str(gettime()),"size":size/1000,\
+                "load":'a'*size,"source":MyNode.id,"ideal":cal_ideal_latency(dest)}
             send_msg_to_node(dest, msg)
         except:
             traceback.print_exc()
