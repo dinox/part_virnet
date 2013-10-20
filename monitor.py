@@ -147,7 +147,8 @@ class MonitorService(object):
     commands = { "lookup"   : DNS_Lookup,
                  "map"      : DNS_Map   ,
                  "log_msg"  : Log       ,
-                 "heartbeat": Heartbeat }
+                 "heartbeat": Heartbeat ,
+                 "overlay_view" : Overview}
 
 class MonitorProtocol(NetstringReceiver):
     def stringReceived(self, request):
