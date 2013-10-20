@@ -20,6 +20,10 @@ class Node(object):
     overlay = None
     tcp_port = 13337
     udp_port = 13338
+    TIMEOUT = 11
+    HEARTBEAT = 5
+    LOOKUP = 30
+    PING = 20
 
     def get_node(self):
         return {"host" : self.host,
@@ -94,11 +98,28 @@ class Overlay(object):
     nodes = dict()
     last_msg = dict()
     edges = dict()
-    dist = dict()
     route = dict()
 
     def __init__(self):
         self.edges[MyNode.id] = dict()
+
+    def delete(self, node):
+        global MyNode
+        try:
+            del self.nodes[node]
+            del self.last_msg[node]
+            del self.edges[node]
+            del self.route[node]
+            if node in MyNode.neighbourhood.nodes:
+                MyNode.neighbourhood.nodes[node] = {}
+            if node in MyNode.neighbourhood.pings:
+                del MyNode.neighbourhood.pings[node]
+        except:
+            log("error", "Exception in Overlay.delete()")
+            traceback.print_exc()
+        self.dijkstra_dist()
+        log("fail", "node"+node)
+        print("FAIL node"+node)
 
     def view(self):
         global MyNode
@@ -136,14 +157,14 @@ class Overlay(object):
     def dijkstra_dist(self):
         self.edges[MyNode.id] = MyNode.neighbourhood.pings
         INF = 999999999999.0                # infinity value
-        self.dist = dict()          # reset distances
+        dist = dict()                # reset distances
         self.route = dict()         # reset routes
         v = dict()                  # initialise set with unvisited nodes
         for node in self.nodes:
-            self.dist[node] = INF
+            dist[node] = INF
             self.route[node] = []
             v[node] = 1
-        self.dist[MyNode.id] = 0    # add myself
+        dist[MyNode.id] = 0    # add myself
         self.route[MyNode.id] = []
         v[MyNode.id] = 1
         min_dist_id = MyNode.id     # set start node to myself
@@ -153,19 +174,19 @@ class Overlay(object):
             c = min_dist_id         # current selected node
             for (key,val) in self.edges[c].iteritems():
                 if key in v:          # check all edges to unvisited nodes
-                    if self.dist[c]+val < self.dist[key]:
-                        self.dist[key] = self.dist[c]+val
+                    if dist[c]+val < dist[key]:
+                        dist[key] = dist[c]+val
                         self.route[key] = self.route[c][:]
                         self.route[key].append(c)
-                    if self.dist[key] < min_dist_value:
-                        min_dist_value = self.dist[key]
+                    if dist[key] < min_dist_value:
+                        min_dist_value = dist[key]
                         min_dist_id = key
             del v[c]
             if c == min_dist_id:
                 # other nodes not reachable, finished
                 v = dict()
         print("route table: "+str(self.route))
-        log("Debug", "Dijkstra dist"+str(self.dist))
+        log("Debug", "Dijkstra dist"+str(dist))
         log("Debug", "Dijkstra route"+str(self.route))
 
 
@@ -398,14 +419,16 @@ def send_msg_to_node(nodeID, msg):
     routes = MyNode.overlay.route
     if nodeID in routes:
         r = routes[nodeID]
+        print(r)
         if len(r) == 0 or not r[0] == MyNode.id:
             log("error", "invalid route")
-        if len(r) == 1:
-            send_msg(MyNode.overlay.nodes[nodeID], msg)
         else:
-            del r[0]
-            r.append(nodeID)
-            send_routed_msg(r, msg)
+            if len(r) == 1:
+                send_msg(MyNode.overlay.nodes[nodeID], msg)
+            else:
+                del r[0]
+                r.append(nodeID)
+                send_routed_msg(r, msg)
     log("Debug", "No route to send message")
 
 def error_callback(s):
@@ -423,6 +446,20 @@ def log(event, desc):
     data["command"] = "log_msg"
     data["id"] = MyNode.id
     send_msg(MyNode.monitor, data)
+
+def alive_heartbeat():
+    global MyNode
+    for node,item in MyNode.overlay.last_msg.items():
+        if MyNode.overlay.last_msg[node] + (MyNode.TIMEOUT*10000) < gettime():
+            # assume node is dead
+            MyNode.overlay.delete(node)
+
+def route_msg_heartbeat():
+    global MyNode
+    source = "1"
+    dest = "3"
+    if MyNode.id == source:
+        send_msg_to_node(dest, "me")
 
 #Ping call to measure the latency (called periodically by
 # the reactor through LoopingCall)
@@ -512,10 +549,12 @@ def main():
     d.addErrback(monitor_not_reachable)
 
     # refresh addresses periodically
-    LoopingCall(MyNode.neighbourhood.lookup).start(30)
-    LoopingCall(client_heartbeat).start(6)
-    LoopingCall(measure_latency).start(2)
-    LoopingCall(monitor_heartbeat).start(5)
+    LoopingCall(MyNode.neighbourhood.lookup).start(MyNode.LOOKUP)
+    LoopingCall(client_heartbeat).start(MyNode.HEARTBEAT)
+    LoopingCall(measure_latency).start(MyNode.PING)
+    LoopingCall(monitor_heartbeat).start(MyNode.HEARTBEAT)
+    LoopingCall(alive_heartbeat).start(MyNode.HEARTBEAT)
+    LoopingCall(route_msg_heartbeat).start(MyNode.PING)
 
     reactor.run()
 
