@@ -61,8 +61,9 @@ class Monitor(object):
 
     def add_node(self, id, node):
         node["alive"] = True
-        node["stable"] = True
+        node["stable"] = False
         node["id"] = int(id)
+        node["ping"] = time.time()
         self.nodes.append(node)
 
     def get_node(self, id):
