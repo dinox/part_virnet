@@ -257,7 +257,7 @@ class ClientService(object):
                     send_msg(node, reply)
             try:
                 msg = {"command" : "overlay_view", "id" : MyNode.id, "nodes":\
-                        str(MyNode.overlay.view()}
+                        str(MyNode.overlay.view())}
                 send_msg(MyNode.monitor, msg)
             except:
                 traceback.print_exc()
