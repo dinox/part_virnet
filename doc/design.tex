@@ -122,11 +122,23 @@ This measurement is then sent to the monitor.
 
 \subsection{Monitor}
 
+TODO: describe
+
+\subsection{Scripts}
+
+TODO: describe
+
+\subsubsection{Startscript}
+
+\subsubsection{Shutdown script}
+
+\subsubsection{Reaction time script}
+
 \section{Part D}
 
 %------------------------------------------------
 
-\subsection{Coordinator reelection}
+\subsection{Real vs ideal latency}
 The nodes keep track of when the last ping from the coordinator was received, and when a certain time has progressed (we used 25 seconds) then the coordinator is considered dead. The election of a new coordinator is done according to the following list:
 \begin{itemize}
 	\item Send a ping to the current coordinator, if he responds exit.
@@ -139,21 +151,6 @@ The nodes keep track of when the last ping from the coordinator was received, an
 
 %------------------------------------------------
 
-\subsection{Latency measurement}
-
-Every thirty seconds each node calculates the latency to every other node in the network. This is implemented in the \textit{measure\_latency} function by sending a ping message on the \textit{ping channel} to another node. Using this latency, the new average latency is calculated and both values are logged to the \textit{latency.log} file. Every minute, the nodes sends array of average latencies to the coordinator. The node logs an exception if a ping in the latency measurement fails, so this will not affect the average latency.
-
-The coordinator does exactly the same, he also uses the \textit{maintenance channel} to send the average latencies to himself every minute. The average latencies that are sent to the coordinator are logged to the \textit{pings.log} file. This file is only created at the coordinator node.
-
-\subsection{A longer trace}
-
-The log files for the longer trace were produced on Sunday, between 4 p.m. and 6 p.m. The three participants of the overlay networks are \textit{righthand.eecs.harvard.edu}, a node from the Harvard University as the American node, \textit{planetlab1.inf.ethz.ch}, a node from ETHZ as the European node and \textit{pln.zju.edu.cn}, a node form the Zhejian University as the Asian node.
-
-%\begin{figure*}[th]
-% \includegraphics[width=\textwidth]{latency_harvard_ethz.pdf}
-% \caption{Latency from Harvard to ETHZ}
-% \label{fig:latency_harvard_ethz}
-%\end{figure}
-%----------------------------------------------------------------------------------------
+\subsection{Evaluation graph}
 
 \end{document}
