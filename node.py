@@ -1,5 +1,5 @@
 import optparse, sys, json, socket, traceback, SocketServer, threading, time,\
-        os
+        os, atexit, signal
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(SCRIPT_DIR, 'third_party', 'Twisted-13.1.0'))
@@ -9,6 +9,7 @@ from twisted.internet import defer, reactor
 from twisted.internet.protocol import Protocol, ClientFactory, ServerFactory,\
     DatagramProtocol
 from twisted.protocols.basic import NetstringReceiver
+from twisted.internet.task import LoopingCall
 
 #global variables
 class Node(object):
@@ -118,7 +119,7 @@ class Overlay(object):
     def __init__(self):
         self.edges[MyNode.id] = dict()
 
-    def delete(self, node):
+    def delete(self, node, state):
         global MyNode
         try:
             del self.nodes[node]
@@ -133,8 +134,8 @@ class Overlay(object):
             log("error", "Exception in Overlay.delete()")
             traceback.print_exc()
         self.dijkstra_dist()
-        log("fail", "node"+node)
-        print("FAIL node"+node)
+        log(state, "node"+node)
+        print(state.upper() + " node"+node)
 
     def view(self):
         global MyNode
@@ -202,6 +203,16 @@ class Overlay(object):
                 v = dict()
         log("Debug", "Dijkstra dist"+str(dist))
         log("Debug", "Dijkstra route"+str(self.route))
+        self.log_routing_table()
+
+    def log_routing_table(self):
+        f = open("overlay.log","a")
+        msg = time.strftime("%Y/%m/%d %H:%M:%S") + ": ROUTE"
+        f.write(msg + "\n")
+        tab = "    "
+        for key,value in self.route.items():
+            f.write(tab+"node"+key+": "+str(value)+"\n")
+        f.close()
 
 
 class ClientService(object):
@@ -290,9 +301,15 @@ class ClientService(object):
         print data
         log("Debug", "Got debug message: %s" % data)
 
+    def Leave(self, data):
+        global MyNode
+        print("YESSSSSSSS**************")
+        MyNode.overlay.delete(data["id"], "leave")
+
 
     commands = {"ok"    : OK,
                 "error" : Error,
+                "leave" : Leave,
                 "dns_reply" : DNS_Reply,
                 "dns_fail"  : DNS_Fail,
                 "heartbeat" : Heartbeat,
@@ -489,7 +506,7 @@ def alive_heartbeat():
     for node,item in MyNode.overlay.last_msg.items():
         if MyNode.overlay.last_msg[node] + (MyNode.TIMEOUT*10000) < gettime():
             # assume node is dead
-            MyNode.overlay.delete(node)
+            MyNode.overlay.delete(node, "fail")
 
 def route_msg_heartbeat():
     global MyNode
@@ -576,6 +593,34 @@ def init_with_monitor(monitor, node, my_id):
     reactor.connectTCP(monitor["host"], monitor["tcp_port"], factory)
     return factory.deferred
 
+# exit function
+def send_leave_msg(address, msg):
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((address["host"], address["tcp_port"]))
+        s.send(json.dumps(msg))
+        ret = s.recv(1024)
+    except:
+        traceback.print_exc()
+
+def leave():
+    global MyNode
+    try:
+        message = {"command" : "leave", "id" : MyNode.id }
+        result = send_leave_msg(MyNode.monitor, message)
+        for key,value in MyNode.neighbourhood.nodes.items():
+            if "host" in value:
+                send_leave_msg(value, message)
+    except:
+        traceback.print_exc()
+
+def before_exit():
+    f = open("overlay.log","a")
+    f.write(time.strftime("%Y/%m/%d %H:%M:%S") + ": Exit\n")
+    f.close()
+    leave()
+    time.sleep(1)
+    sys.exit(0)
 
 # MAIN
 
@@ -591,7 +636,9 @@ def main():
     else:
         MyNode.neighbourhood = Neighbourhood([0,1,2])
 
-    from twisted.internet.task import LoopingCall
+    # Register before_exit() as the function which does cleanup before python
+    # exits the program
+    atexit.register(before_exit)
 
     # initialize UDP socket
     listen_udp = reactor.listenUDP(MyNode.udp_port, UDPServer(), interface=MyNode.host)
@@ -605,6 +652,11 @@ def main():
     log("init", 'Listening on %s.' % (listen_tcp.getHost()))
     print("node"+MyNode.id+" init, listening on "+str(listen_tcp.getHost()))
     MyNode.tcp_port = listen_tcp.getHost().port
+
+    # initialize overlay.log
+    f = open("overlay.log", "a")
+    f.write("\n"+time.strftime("%Y/%m/%d %H:%M:%S")+" Start node"+MyNode.id+"\n")
+    f.close()
 
     # initialize Neighbourhood
     MyNode.overlay = Overlay()
