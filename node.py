@@ -22,10 +22,10 @@ class Node(object):
     tcp_port = 13337            # my tcp port (initialized randomly in main())
     udp_port = 13338            # my udp port (initialized randomly in main())
 
-    TIMEOUT = 5                 # timeout for nodes of the overlay
-    HEARTBEAT = 2               # heartbeat interval
-    LOOKUP = 30                 # lookup interval
-    PING = 20                   # ping interval
+    TIMEOUT = 11                # timeout for nodes of the overlay
+    HEARTBEAT = 5               # heartbeat interval
+    LOOKUP = 60                 # lookup interval
+    PING = 30                   # ping interval
 
     route_src = 2               # source node of routed msg
     route_dst = 9               # dest node of routed msg
@@ -234,12 +234,12 @@ class ClientService(object):
             if is_new:
                 measure_latency()
                 client_heartbeat()
-            log("lookup", "node"+str(reply["id"])+"->"+str(reply["node"]))
+            log("Debug", "lookup node"+str(reply["id"])+"->"+str(reply["node"]))
         else:
             print "DNS reply did not contain node data"
 
     def DNS_Fail(self, reply):
-        log("lookup", "node"+str(reply["id"])+" is not alive")
+        log("Debug", "lookup node"+str(reply["id"])+" is not alive")
 
     def Error(self, reply):
         if "reason" in reply:
@@ -256,7 +256,7 @@ class ClientService(object):
                 if "host" in node:
                     send_msg(node, reply)
             try:
-                log("overlay", str(MyNode.overlay.view()))
+                log("Debug", "overlay "+ str(MyNode.overlay.view()))
             except:
                 traceback.print_exc()
 
@@ -521,7 +521,7 @@ def route_msg_heartbeat():
 
     if MyNode.id == source and dest in MyNode.overlay.route:
         try:
-            log("routed_msg", "Send msg from node"+source+" to node"+dest)
+            log("Debug", "routed_msg: Send msg from node"+source+" to node"+dest)
             msg = {"command":"request_reply","time":str(gettime()),"size":size/1000,\
                 "load":'a'*size,"source":MyNode.id,"ideal":cal_ideal_latency(dest)}
             send_msg_to_node(dest, msg)
@@ -562,7 +562,7 @@ def client_heartbeat():
     if not MyNode.neighbourhood.is_complete:
         MyNode.neighbourhood.lookup()
     # send heartbeat msg to all neighbours
-    log("Heartbeat", "Heartbeat node"+str(MyNode.id))
+    log("Debug", "Heartbeat node"+str(MyNode.id))
     print("Client Heartbeat: node"+MyNode.id)
     print("Neighbours: " + str(MyNode.neighbourhood.nodes))
     print("Pings: " + str(MyNode.neighbourhood.pings))
