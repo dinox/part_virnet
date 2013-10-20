@@ -261,7 +261,8 @@ class ClientService(object):
     def Route_reply(self, data):
         global MyNode
         if "source" in data:
-            msg = {"command" : "reply","time":data["time"]}
+            ideal = float(data["ideal"]) + cal_ideal_latency(data["source"])
+            msg = {"command":"reply","time":data["time"],"ideal":ideal,"source":MyNode.id}
             print(msg)
             send_msg_to_node(data["source"], msg)
         else:
@@ -269,8 +270,12 @@ class ClientService(object):
 
     def Reply(self, data):
         global MyNode
-        l = gettime() - data["time"]
-        print("Routed reply received: " + str(l))
+        l = gettime() - int(data["time"])
+        l = float(l) / 10
+        i = float(data["ideal"]) / 10
+        print("Routed reply received: real "+str(l)+"(ms), ideal "+str(i)+"(ms)")
+        log("routed_msg", "node"+MyNode.id+" to node"+data["source"]+":"+str(l)+\
+                " ms (real), "+str(i)+" ms (ideal)")
 
     def Debug(self, data):
         print data
@@ -441,7 +446,7 @@ def send_msg_to_node(nodeID, msg):
     routes = MyNode.overlay.route
     if nodeID in routes:
         r = routes[nodeID]
-        print(r)
+        print("send msg to node, route: "+str(r))
         if len(r) == 0 or not r[0] == MyNode.id:
             log("error", "invalid route")
         else:
@@ -485,16 +490,16 @@ def route_msg_heartbeat():
         try:
             log("routed_msg", "Send msg from node"+source+" to node"+dest)
             k = 'a'*1000
-            route = MyNode.overlay.route[dest]
-            route.append(dest)
             msg = {"command":"request_reply","time":str(gettime()),\
-                "load":k,"source":MyNode.id,"ideal":cal_ideal_latency(route)}
+                "load":k,"source":MyNode.id,"ideal":cal_ideal_latency(dest)}
             send_msg_to_node(dest, msg)
         except:
             traceback.print_exc()
 
-def cal_ideal_latency(route):
+def cal_ideal_latency(dest):
     global MyNode
+    route = MyNode.overlay.route[dest][:]
+    route.append(dest)
     l = 0
     source = route[0]
     del route[0]
