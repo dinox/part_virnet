@@ -87,7 +87,6 @@ class Neighbourhood(object):
 
     def lookup(self):
         global MyNode
-        from twisted.internet import reactor
         for nodeID, node in self.nodes.items():
             send_msg(MyNode.monitor, {"command" : "lookup", "id" : nodeID})
 
@@ -104,19 +103,17 @@ class Overlay(object):
     def update_node(self, node, neighbours, sqn):
         node = str(node)
         if not node in self.nodes:
-            print("NEW NODE!!!")
-            #TODO: send JOIN to monitor
+            log("join", "node"+node)
+            print("JOIN node"+node)
         n = MyNode.neighbourhood.nodes
         if node in n and not "host" in n[node]:
             # Node in my neighbourhood joined, do lookup
+            print("LOOKUP NEIGHBOUR")
             MyNode.neighbourhood.lookup()
         self.nodes[node] = sqn
         self.last_msg[node] = gettime()
         self.edges[node] = neighbours
         self.dijkstra_dist()
-        print(str(self.nodes))
-        print(str(self.last_msg))
-        print(str(self.edges))
         log("routing table", str(self.route))
 
     def is_valid_msg(self, msg):
@@ -131,7 +128,7 @@ class Overlay(object):
 
     def dijkstra_dist(self):
         self.edges[MyNode.id] = MyNode.neighbourhood.pings
-        INF = 1000.0                # infinity value
+        INF = 999999999999.0                # infinity value
         self.dist = dict()          # reset distances
         self.route = dict()         # reset routes
         v = dict()                  # initialise set with unvisited nodes
@@ -144,14 +141,11 @@ class Overlay(object):
         v[MyNode.id] = 1
         min_dist_id = MyNode.id     # set start node to myself
         min_dist_value = 0
-        print("Start dijkstra")
         while len(v) > 0:           # while unvisited nodes
             min_dist_value = INF
             c = min_dist_id         # current selected node
-            print(self.edges[c])
             for (key,val) in self.edges[c].iteritems():
                 if key in v:          # check all edges to unvisited nodes
-                    print(str(key)+":"+str(self.dist[c]+val)+"<"+str(self.dist[key]))
                     if self.dist[c]+val < self.dist[key]:
                         self.dist[key] = self.dist[c]+val
                         self.route[key] = self.route[c][:]
@@ -219,6 +213,9 @@ class ClientService(object):
             print "Wrong format"
             return {"command" : "error", "reason" : "Wrong format"}
 
+    def Reply(self, pkg):
+        pass
+
     def Debug(self, data):
         print data
         log("Debug", "Got debug message: %s" % data)
@@ -230,7 +227,8 @@ class ClientService(object):
                 "dns_fail"  : DNS_Fail,
                 "heartbeat" : Heartbeat,
                 "route"     : RoutedMessage,
-                "debug"     : Debug     }
+                "debug"     : Debug,
+                "reply"     : Reply }
 
 class ClientProtocol(NetstringReceiver):
 

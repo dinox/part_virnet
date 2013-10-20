@@ -56,17 +56,17 @@ class MonitorService(object):
             else:
                 return json.dumps({"command" : "dns_fail", "reason" : "id does not " +
                     "exist", "id" : data["id"]})
-        except Exception as e:
-            print("Exception in DNS_Loopup: "+e)
-            return json.dumps({"command" : "error", "reason" : e})
+        except:
+            traceback.print_exc()
+            return json.dumps({"command" : "error", "reason" : "Exception"})
 
     def DNS_Map(self, data):
         if "id" in data and "node" in data:
             try:
                 self.monitor.nodes[data["id"]] = data["node"]
-            except Exception as e:
-                print("Exception in DNS_Map: " + e)
-                return json.dumps({"command" : "error", "reason" : e})
+            except:
+                traceback.print_exc()
+                return json.dumps({"command" : "error", "reason" : "Eception"})
             Logger.log_self("New node", "Added node%s to DNS list" % data["id"])
             return json.dumps({"command" : "ok"})
         return json.dumps({"command" : "error", "reason" : "No id or no node in " +
