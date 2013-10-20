@@ -1,4 +1,5 @@
-import optparse, sys, json, socket, traceback, SocketServer, threading, time, os
+import optparse, sys, json, socket, traceback, SocketServer, threading, time,\
+        os
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(SCRIPT_DIR, 'third_party', 'Twisted-13.1.0'))
@@ -12,7 +13,7 @@ from twisted.protocols.basic import NetstringReceiver
 #global variables
 class Node(object):
     monitor = "undefinded"
-    id = 0
+    id = "0"
     host = '127.0.0.1'
     my_sqn = 0
     neighbourhood = None
@@ -81,7 +82,7 @@ class Neighbourhood(object):
         global MyNode
         for node in vir_nodes:
             if not node == MyNode.id:
-                self.nodes[node] = {}
+                self.nodes[str(node)] = {}
         self.lookup()
 
     def lookup(self):
@@ -101,13 +102,14 @@ class Overlay(object):
         self.edges[MyNode.id] = dict()
 
     def update_node(self, node, neighbours, sqn):
+        node = str(node)
         if not node in self.nodes:
             print("NEW NODE!!!")
             #TODO: send JOIN to monitor
-            n = MyNode.neighbourhood.nodes
-            if node in n and not "host" in n[node]:
-                # Node in my neighbourhood joined, do lookup
-                MyNode.neighbourhood.lookup()
+        n = MyNode.neighbourhood.nodes
+        if node in n and not "host" in n[node]:
+            # Node in my neighbourhood joined, do lookup
+            MyNode.neighbourhood.lookup()
         self.nodes[node] = sqn
         self.last_msg[node] = gettime()
         self.edges[node] = neighbours
@@ -142,12 +144,14 @@ class Overlay(object):
         v[MyNode.id] = 1
         min_dist_id = MyNode.id     # set start node to myself
         min_dist_value = 0
+        print("Start dijkstra")
         while len(v) > 0:           # while unvisited nodes
             min_dist_value = INF
             c = min_dist_id         # current selected node
             print(self.edges[c])
             for (key,val) in self.edges[c].iteritems():
                 if key in v:          # check all edges to unvisited nodes
+                    print(str(key)+":"+str(self.dist[c]+val)+"<"+str(self.dist[key]))
                     if self.dist[c]+val < self.dist[key]:
                         self.dist[key] = self.dist[c]+val
                         self.route[key] = self.route[c][:]
@@ -175,6 +179,7 @@ class ClientService(object):
         global MyNode
         if "node" in reply:
             MyNode.neighbourhood.nodes[reply["id"]] = reply["node"]
+            client_heartbeat()
             log("lookup", "node"+str(reply["id"])+"->"+str(reply["node"]))
         else:
             print "DNS reply did not contain node data"
@@ -333,7 +338,7 @@ class UDPClient(DatagramProtocol):
         global MyNode
         s = datagram.split(":")
         t = gettime() - float(s[1])
-        MyNode.neighbourhood.pings[int(s[0])] = t
+        MyNode.neighbourhood.pings[s[0]] = t
         log("ping", "Ping to "+s[0]+" in "+str(t)+"ms")
 
     def sendDatagram(self):
@@ -415,6 +420,7 @@ def client_heartbeat():
     msg = {"command":"heartbeat","source":MyNode.id,\
             "sequence":MyNode.get_sqn(),"neighbours":\
             MyNode.neighbourhood.pings}
+    print("PINGS: "+str(MyNode.neighbourhood.pings))
     for nodeID, node in MyNode.neighbourhood.nodes.items():
         if "host" in node:
             send_msg(node, msg)
@@ -444,7 +450,7 @@ def init_with_monitor(monitor, node, my_id):
 def main():
     global MyNode
     options, MyNode.monitor = parse_args()
-    MyNode.id = options.id or 0
+    MyNode.id = str(options.id or 0)
     MyNode.host = options.iface or socket.gethostbyname(socket.gethostname())
     MyNode.tcp_port = options.tport or 0
     MyNode.udp_port = options.uport or 0
