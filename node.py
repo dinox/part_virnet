@@ -101,10 +101,20 @@ class Overlay(object):
         self.edges[MyNode.id] = dict()
 
     def update_node(self, node, neighbours, sqn):
+        if not node in self.nodes:
+            print("NEW NODE!!!")
+            #TODO: send JOIN to monitor
+            n = MyNode.neighbourhood.nodes
+            if node in n and not "host" in n[node]:
+                # Node in my neighbourhood joined, do lookup
+                MyNode.neighbourhood.lookup()
         self.nodes[node] = sqn
-        self.last_msg[node] = time.time()
+        self.last_msg[node] = gettime()
         self.edges[node] = neighbours
         self.dijkstra_dist()
+        print(str(self.nodes))
+        print(str(self.last_msg))
+        print(str(self.edges))
         log("routing table", str(self.route))
 
     def is_valid_msg(self, msg):
@@ -322,15 +332,18 @@ class UDPClient(DatagramProtocol):
     def datagramReceived(self, datagram, host):
         global MyNode
         s = datagram.split(":")
-        t = self.time() - float(s[1])
+        t = gettime() - float(s[1])
         MyNode.neighbourhood.pings[int(s[0])] = t
         log("ping", "Ping to "+s[0]+" in "+str(t)+"ms")
 
     def sendDatagram(self):
-        msg = str(self.nodeID)+":"+str(time.time())
+        msg = str(self.nodeID)+":"+str(gettime())
         self.transport.write(msg)
-    def time(self):
-        return int(round(time.time() * 10000))
+
+
+# time function
+def gettime():
+    return int(round(time.time() * 10000))
 
 # Ping request
 
@@ -467,8 +480,8 @@ def main():
 
     # refresh addresses periodically
     LoopingCall(MyNode.neighbourhood.lookup).start(30)
-    LoopingCall(client_heartbeat).start(20)
-    LoopingCall(measure_latency).start(5)
+    LoopingCall(client_heartbeat).start(6)
+    LoopingCall(measure_latency).start(2)
     LoopingCall(monitor_heartbeat).start(5)
 
     reactor.run()
