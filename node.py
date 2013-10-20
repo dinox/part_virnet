@@ -245,13 +245,11 @@ class ClientService(object):
 
 
     def RoutedMessage(self, pkg):
-        print pkg
         if "route" in pkg and "data" in pkg:
             print("Forward routed message")
             del pkg["route"][0]
             if len(pkg["route"]) == 1 and pkg["route"][0] in MyNode.neighbourhood.nodes:
                 print("forward to neighbour")
-                print(pkg["data"])
                 send_msg(MyNode.neighbourhood.nodes[pkg["route"][0]], pkg["data"])
             elif pkg["route"][0] in MyNode.neighbourhood.nodes:
                 send_msg(MyNode.neighbourhood.nodes[pkg["route"][0]], pkg)
@@ -263,14 +261,20 @@ class ClientService(object):
             print "Wrong format"
             return {"command" : "error", "reason" : "Wrong format"}
 
-    def Reply(self, data):
+    def Route_reply(self, data):
         global MyNode
-        print("ROUTET MESSAGE RECEIVED!!")
+        print("ROUTED MESSAGE RECEIVED!!")
+        print(data)
         if "source" in data:
-            msg = {"command" : "ok"}
-            send_routed_msg(data["source"], msg)
+            msg = {"command" : "reply","time":data["time"]}
+            print(msg)
+            send_msg_to_node(data["source"], msg)
         else:
             log("error", "invalid Reply message")
+
+    def Reply(self, data):
+        global MyNode
+        print("Routed reply received!")
 
     def Debug(self, data):
         print data
@@ -284,7 +288,8 @@ class ClientService(object):
                 "heartbeat" : Heartbeat,
                 "route"     : RoutedMessage,
                 "debug"     : Debug,
-                "reply"     : Reply }
+                "reply"     : Reply,
+                "request_reply" : Route_reply }
 
 class ClientProtocol(NetstringReceiver):
 
@@ -450,6 +455,7 @@ def send_msg_to_node(nodeID, msg):
                 del r[0]
                 r.append(nodeID)
                 send_routed_msg(r, msg)
+                print("Routed msg sent")
     log("Debug", "No route to send message")
 
 def error_callback(s):
@@ -482,8 +488,8 @@ def route_msg_heartbeat():
     if MyNode.id == source:
         log("routed_msg", "Send msg from node"+source+" to node"+dest)
         k = 'a'*1000
-        print("ROUTED MSG SENT")
-        msg = {"command":"reply","time":str(gettime()), "load":k}
+        msg = {"command":"request_reply","time":str(gettime()),\
+                "load":k,"source":MyNode.id}
         send_msg_to_node(dest, msg)
 
 #Ping call to measure the latency (called periodically by
@@ -508,10 +514,13 @@ def client_heartbeat():
         MyNode.neighbourhood.lookup()
     # send heartbeat msg to all neighbours
     log("Heartbeat", "Heartbeat node"+str(MyNode.id))
+    print("Client Heartbeat: node"+MyNode.id)
+    print("Neighbours: " + str(MyNode.neighbourhood.nodes))
+    print("Pings: " + str(MyNode.neighbourhood.pings))
+    print("Routing: " + str(MyNode.overlay.route))
     msg = {"command":"heartbeat","source":MyNode.id,\
             "sequence":MyNode.get_sqn(),"neighbours":\
             MyNode.neighbourhood.pings}
-    print("PINGS: "+str(MyNode.neighbourhood.pings))
     for nodeID, node in MyNode.neighbourhood.nodes.items():
         if "host" in node:
             send_msg(node, msg)
@@ -555,12 +564,14 @@ def main():
     # initialize UDP socket
     listen_udp = reactor.listenUDP(MyNode.udp_port, UDPServer(), interface=MyNode.host)
     log("init", 'Listening on %s.' % (listen_udp.getHost()))
+    print("node"+MyNode.id+" init, listening on "+str(listen_udp.getHost()))
     MyNode.udp_port = listen_udp.getHost().port
 
     service = ClientService()
     factory = NodeServerFactory(service)
     listen_tcp = reactor.listenTCP(MyNode.tcp_port, factory, interface=MyNode.host)
     log("init", 'Listening on %s.' % (listen_tcp.getHost()))
+    print("node"+MyNode.id+" init, listening on "+str(listen_tcp.getHost()))
     MyNode.tcp_port = listen_tcp.getHost().port
 
     # initialize Neighbourhood
