@@ -193,7 +193,6 @@ class Overlay(object):
             if c == min_dist_id:
                 # other nodes not reachable, finished
                 v = dict()
-        print("route table: "+str(self.route))
         log("Debug", "Dijkstra dist"+str(dist))
         log("Debug", "Dijkstra route"+str(self.route))
 
@@ -246,10 +245,8 @@ class ClientService(object):
 
     def RoutedMessage(self, pkg):
         if "route" in pkg and "data" in pkg:
-            print("Forward routed message")
             del pkg["route"][0]
             if len(pkg["route"]) == 1 and pkg["route"][0] in MyNode.neighbourhood.nodes:
-                print("forward to neighbour")
                 send_msg(MyNode.neighbourhood.nodes[pkg["route"][0]], pkg["data"])
             elif pkg["route"][0] in MyNode.neighbourhood.nodes:
                 send_msg(MyNode.neighbourhood.nodes[pkg["route"][0]], pkg)
@@ -263,8 +260,6 @@ class ClientService(object):
 
     def Route_reply(self, data):
         global MyNode
-        print("ROUTED MESSAGE RECEIVED!!")
-        print(data)
         if "source" in data:
             msg = {"command" : "reply","time":data["time"]}
             print(msg)
@@ -274,7 +269,8 @@ class ClientService(object):
 
     def Reply(self, data):
         global MyNode
-        print("Routed reply received!")
+        l = gettime() - data["time"]
+        print("Routed reply received: " + str(l))
 
     def Debug(self, data):
         print data
@@ -485,12 +481,28 @@ def route_msg_heartbeat():
     global MyNode
     source = "1"
     dest = "3"
-    if MyNode.id == source:
-        log("routed_msg", "Send msg from node"+source+" to node"+dest)
-        k = 'a'*1000
-        msg = {"command":"request_reply","time":str(gettime()),\
-                "load":k,"source":MyNode.id}
-        send_msg_to_node(dest, msg)
+    if MyNode.id == source and dest in MyNode.overlay.route:
+        try:
+            log("routed_msg", "Send msg from node"+source+" to node"+dest)
+            k = 'a'*1000
+            route = MyNode.overlay.route[dest]
+            route.append(dest)
+            msg = {"command":"request_reply","time":str(gettime()),\
+                "load":k,"source":MyNode.id,"ideal":cal_ideal_latency(route)}
+            send_msg_to_node(dest, msg)
+        except:
+            traceback.print_exc()
+
+def cal_ideal_latency(route):
+    global MyNode
+    l = 0
+    source = route[0]
+    del route[0]
+    while len(route) > 0:
+        l = l + MyNode.overlay.edges[source][route[0]]
+        source = route[0]
+        del route[0]
+    return l;
 
 #Ping call to measure the latency (called periodically by
 # the reactor through LoopingCall)
