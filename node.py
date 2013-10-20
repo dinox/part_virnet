@@ -27,8 +27,8 @@ class Node(object):
     LOOKUP = 30                 # lookup interval
     PING = 20                   # ping interval
 
-    route_src = 1               # source node of routed msg
-    route_dst = 3               # dest node of routed msg
+    route_src = 2               # source node of routed msg
+    route_dst = 9               # dest node of routed msg
     is_small = True             # flag for the size of the routed msg, always
                                 # switched (first send 1kb, then 10kb, then
                                 # 1kb,...)
