@@ -1,8 +1,8 @@
 1:planetlab1.inf.ethz.ch
-5:planetlab-1.ssvl.kth.se
-6:planetlab2.s3.kth.se
+5:planetlab05.mpi-sws.mpg.de
+6:planetlab1.s3.kth.se
 9:planetlab2.s3.kth.se
-13:planetlab-2.ssvl.kth.se
+13:planetlab02.tkn.tu-berlin.de
 2:planetlab6.cs.cornell.edu
 3:planetlab1.cs.uml.edu
 7:planetlab01.cs.washington.edu

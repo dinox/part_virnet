@@ -31,7 +31,7 @@ def start_node(node):
     print "Connecting to node%s with hostname %s." % (node["id"], node["host"])
     try:
         remote = SshMachine(node["host"], port = 22022, user = username, 
-                keyfile = path_to_keyfile)
+                keyfile = path_to_keyfile, ssh_opts=["-o", "StrictHostKeyChecking=no"])
     except Exception as e:
         print "Could not connect to %s: %s" % (node["host"], e)
         return
@@ -42,7 +42,7 @@ def start_node(node):
         pass
     print "[%s]Downloading application..." % node["id"]
     remote["wget"]("-O", "node", 
-            "https://www.dropbox.com/s/mjw7dic2ywk5jrp/node")
+        "https://www.dropbox.com/s/mjw7dic2ywk5jrp/node")
     remote["chmod"]("u+x", "node")
     print "[%s]Starting python node..." % node["id"]
     try:
@@ -57,7 +57,7 @@ def kill_node(node):
     print "Killing node%s" % node["id"]
     try:
         remote = SshMachine(node["host"], port = 22022, user = username, 
-                keyfile = path_to_keyfile)
+                keyfile = path_to_keyfile, ssh_opts=["-o StrictHostKeyChecking=no"])
     except Exception as e:
         print "Could not connect to %s: %s" % (node["host"], e)
         return
@@ -103,7 +103,7 @@ pidfile = "startup.pid"
 file(pidfile, 'w').write(pid)
 print "pid = %s" % pid
 for node in nodes:
-    #Process(target=start_node, args=(node,)).start()
+    Process(target=start_node, args=(node,)).start()
     pass
 kill_script(nodes)
 os.unlink(pidfile)
