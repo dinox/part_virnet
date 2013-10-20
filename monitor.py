@@ -16,7 +16,7 @@ def parse_args():
     parser = optparse.OptionParser(usage)
 
     help = "The port to listen on. Default to a random available port."
-    parser.add_option('--port', type='int', help=help)
+    parser.add_option('-p', '--port', type='int', help=help)
 
     help = "The interface to listen on. Default is 0.0.0.0."
     parser.add_option('--iface', help=help, default='0.0.0.0')
@@ -64,6 +64,11 @@ class Monitor(object):
         node["stable"] = False
         node["id"] = int(id)
         node["ping"] = time.time()
+        curr = self.get_node(id)
+        if curr:
+            for k, v in node.items():
+                curr[k] = v
+            return
         self.nodes.append(node)
 
     def get_node(self, id):
