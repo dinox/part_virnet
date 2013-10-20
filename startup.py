@@ -62,6 +62,6 @@ def start_node(node):
         print "[%s]Got an exception: %s" % (node["id"], e)
     remote.close()
 
-pool_size = 15  # your "parallelness"
+pool_size = 1  # your "parallelness"
 pool = Pool(pool_size)
 pool.map(start_node, nodes)
