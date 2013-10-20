@@ -100,6 +100,14 @@ class Overlay(object):
     def __init__(self):
         self.edges[MyNode.id] = dict()
 
+    def view(self):
+        global MyNode
+        l = []
+        for node in self.nodes:
+            l.append(node)
+        l.append(MyNode.id)
+        return l
+
     def update_node(self, node, neighbours, sqn):
         node = str(node)
         if not node in self.nodes:
@@ -108,13 +116,12 @@ class Overlay(object):
         n = MyNode.neighbourhood.nodes
         if node in n and not "host" in n[node]:
             # Node in my neighbourhood joined, do lookup
-            print("LOOKUP NEIGHBOUR")
             MyNode.neighbourhood.lookup()
         self.nodes[node] = sqn
         self.last_msg[node] = gettime()
         self.edges[node] = neighbours
         self.dijkstra_dist()
-        log("routing table", str(self.route))
+        log("Debug", "routing table: "+str(self.route))
 
     def is_valid_msg(self, msg):
         if msg["source"] == MyNode.id:
@@ -157,11 +164,9 @@ class Overlay(object):
             if c == min_dist_id:
                 # other nodes not reachable, finished
                 v = dict()
-        print("DIJKSTRA FINISHED!")
-        print(self.dist)
-        print(self.route)
-        log("Dijkstra dist", str(self.dist))
-        log("Dijkstra route", str(self.route))
+        print("route table: "+str(self.route))
+        log("Debug", "Dijkstra dist"+str(self.dist))
+        log("Debug", "Dijkstra route"+str(self.route))
 
 
 class ClientService(object):
@@ -195,7 +200,11 @@ class ClientService(object):
             for nodeID,node in MyNode.neighbourhood.nodes.items():
                 if "host" in node:
                     send_msg(node, reply)
-            log("overlay", str(MyNode.overlay.nodes))
+            try:
+                log("overlay", str(MyNode.overlay.view()))
+            except:
+                traceback.print_exc()
+
 
     def RoutedMessage(self, pkg):
         print pkg
@@ -213,8 +222,13 @@ class ClientService(object):
             print "Wrong format"
             return {"command" : "error", "reason" : "Wrong format"}
 
-    def Reply(self, pkg):
-        pass
+    def Reply(self, data):
+        global MyNode
+        if "source" in data:
+            msg = {"command" : "ok"}
+            send_routed_msg(data["source"], msg)
+        else:
+            log("error", "invalid Reply message")
 
     def Debug(self, data):
         print data
@@ -337,7 +351,7 @@ class UDPClient(DatagramProtocol):
         s = datagram.split(":")
         t = gettime() - float(s[1])
         MyNode.neighbourhood.pings[s[0]] = t
-        log("ping", "Ping to "+s[0]+" in "+str(t)+"ms")
+        log("Debug", "Ping to "+s[0]+" in "+str(t)+"ms")
 
     def sendDatagram(self):
         msg = str(self.nodeID)+":"+str(gettime())
@@ -379,6 +393,21 @@ def send_routed_msg(id, msg):
             "data" : msg}
     send_msg(MyNode.neighbourhood.nodes[route[0]], request)
 
+def send_msg_to_node(nodeID, msg):
+    global MyNode
+    routes = MyNode.overlay.route
+    if nodeID in routes:
+        r = routes[nodeID]
+        if len(r) == 0 or not r[0] == MyNode.id:
+            log("error", "invalid route")
+        if len(r) == 1:
+            send_msg(MyNode.overlay.nodes[nodeID], msg)
+        else:
+            del r[0]
+            r.append(nodeID)
+            send_routed_msg(r, msg)
+    log("Debug", "No route to send message")
+
 def error_callback(s):
     log("Debug", "Error in sending message: %s " % str(s))
 
@@ -399,7 +428,7 @@ def log(event, desc):
 # the reactor through LoopingCall)
 def measure_latency():
     global MyNode
-    log("Measure latency", "Sending ping to %d neighbours: %s" %
+    log("Debug", "Measure latency: Sending ping to %d neighbours: %s" %
             (len(MyNode.neighbourhood.nodes),
                 str(MyNode.neighbourhood.nodes.keys())))
     for nodeID, node in MyNode.neighbourhood.nodes.items():
