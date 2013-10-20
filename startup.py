@@ -1,5 +1,6 @@
 from plumbum import SshMachine, commands
 from multiprocessing.pool import ThreadPool as Pool
+from multiprocessing import Process, Array, Value
 import time, json, threading, signal, os
 
 # Change these
@@ -60,13 +61,16 @@ def kill_node(node):
     except Exception as e:
         print "Could not connect to %s: %s" % (node["host"], e)
         return
-    remote["killall"]("node")
+    try:
+        remote["killall"]("node")
+    except:
+        print "Could not kill node%s" % node["id"]
+    else:
+        print "Node%s killed!" % node["id"]
     remote.close()
-    print "Node%s killed!" % node["id"]
 
 
-def kill_script():
-    global k_node, nodes
+def kill_script(nodes):
     print "Waiting for network to initialize"
     wait_for_signal()
     print "Start killing nodes..."
@@ -76,7 +80,7 @@ def kill_script():
         wait_for_signal()
         end = time.time()
         print "Kill node%s: Network reaction time: %.3f seconds" % (node["id"], end-begin)
-        threading.Thread(start_node(node))
+        Process(target=start_node, args=(node,)).start()
         begin = time.time()
         wait_for_signal()
         end = time.time()
@@ -86,10 +90,11 @@ def wait_for_signal():
     global got_signal
     while not got_signal:
         time.sleep(0.01)
+    got_signal = False
 
 def signal_handler(signum, frame):
-    print 'Signal handler called with signal', signum
     global got_signal
+    print 'Signal handler called with signal', signum
     got_signal = True
 
 signal.signal(signal.SIGUSR1, signal_handler)
@@ -97,9 +102,8 @@ pid = str(os.getpid())
 pidfile = "startup.pid"
 file(pidfile, 'w').write(pid)
 print "pid = %s" % pid
-kill_th = threading.Thread(target=kill_script)
-kill_th.start()
-pool_size = 15  # your "parallelness"
-pool = Pool(pool_size)
-pool.map(start_node, nodes)
+for node in nodes:
+    #Process(target=start_node, args=(node,)).start()
+    pass
+kill_script(nodes)
 os.unlink(pidfile)
