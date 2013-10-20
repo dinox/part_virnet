@@ -20,6 +20,10 @@ class Node(object):
     overlay = None
     tcp_port = 13337
     udp_port = 13338
+    TIMEOUT = 11
+    HEARTBEAT = 5
+    LOOKUP = 30
+    PING = 20
 
     def get_node(self):
         return {"host" : self.host,
@@ -77,6 +81,7 @@ def parse_args():
 class Neighbourhood(object):
     nodes = dict()
     pings = dict()
+    is_complete = False
 
     def __init__(self, vir_nodes):
         global MyNode
@@ -90,15 +95,47 @@ class Neighbourhood(object):
         for nodeID, node in self.nodes.items():
             send_msg(MyNode.monitor, {"command" : "lookup", "id" : nodeID})
 
+    def check_complete(self):
+        self.is_complete = True
+        for node in self.nodes:
+            if self.nodes[node] == {}:
+                self.is_complete = False
+                return
+
 class Overlay(object):
     nodes = dict()
     last_msg = dict()
     edges = dict()
-    dist = dict()
     route = dict()
 
     def __init__(self):
         self.edges[MyNode.id] = dict()
+
+    def delete(self, node):
+        global MyNode
+        try:
+            del self.nodes[node]
+            del self.last_msg[node]
+            del self.edges[node]
+            del self.route[node]
+            if node in MyNode.neighbourhood.nodes:
+                MyNode.neighbourhood.nodes[node] = {}
+            if node in MyNode.neighbourhood.pings:
+                del MyNode.neighbourhood.pings[node]
+        except:
+            log("error", "Exception in Overlay.delete()")
+            traceback.print_exc()
+        self.dijkstra_dist()
+        log("fail", "node"+node)
+        print("FAIL node"+node)
+
+    def view(self):
+        global MyNode
+        l = []
+        for node in self.nodes:
+            l.append(node)
+        l.append(MyNode.id)
+        return l
 
     def update_node(self, node, neighbours, sqn):
         node = str(node)
@@ -108,13 +145,12 @@ class Overlay(object):
         n = MyNode.neighbourhood.nodes
         if node in n and not "host" in n[node]:
             # Node in my neighbourhood joined, do lookup
-            print("LOOKUP NEIGHBOUR")
             MyNode.neighbourhood.lookup()
         self.nodes[node] = sqn
         self.last_msg[node] = gettime()
         self.edges[node] = neighbours
         self.dijkstra_dist()
-        log("routing table", str(self.route))
+        log("Debug", "routing table: "+str(self.route))
 
     def is_valid_msg(self, msg):
         if msg["source"] == MyNode.id:
@@ -129,14 +165,14 @@ class Overlay(object):
     def dijkstra_dist(self):
         self.edges[MyNode.id] = MyNode.neighbourhood.pings
         INF = 999999999999.0                # infinity value
-        self.dist = dict()          # reset distances
+        dist = dict()                # reset distances
         self.route = dict()         # reset routes
         v = dict()                  # initialise set with unvisited nodes
         for node in self.nodes:
-            self.dist[node] = INF
+            dist[node] = INF
             self.route[node] = []
             v[node] = 1
-        self.dist[MyNode.id] = 0    # add myself
+        dist[MyNode.id] = 0    # add myself
         self.route[MyNode.id] = []
         v[MyNode.id] = 1
         min_dist_id = MyNode.id     # set start node to myself
@@ -146,22 +182,20 @@ class Overlay(object):
             c = min_dist_id         # current selected node
             for (key,val) in self.edges[c].iteritems():
                 if key in v:          # check all edges to unvisited nodes
-                    if self.dist[c]+val < self.dist[key]:
-                        self.dist[key] = self.dist[c]+val
+                    if dist[c]+val < dist[key]:
+                        dist[key] = dist[c]+val
                         self.route[key] = self.route[c][:]
                         self.route[key].append(c)
-                    if self.dist[key] < min_dist_value:
-                        min_dist_value = self.dist[key]
+                    if dist[key] < min_dist_value:
+                        min_dist_value = dist[key]
                         min_dist_id = key
             del v[c]
             if c == min_dist_id:
                 # other nodes not reachable, finished
                 v = dict()
-        print("DIJKSTRA FINISHED!")
-        print(self.dist)
-        print(self.route)
-        log("Dijkstra dist", str(self.dist))
-        log("Dijkstra route", str(self.route))
+        print("route table: "+str(self.route))
+        log("Debug", "Dijkstra dist"+str(dist))
+        log("Debug", "Dijkstra route"+str(self.route))
 
 
 class ClientService(object):
@@ -172,8 +206,17 @@ class ClientService(object):
     def DNS_Reply(self, reply):
         global MyNode
         if "node" in reply:
+            is_new = True
+            try:
+                if "host" in MyNode.neighbourhood.nodes[reply["id"]]:
+                    is_new = False
+            except:
+                pass
             MyNode.neighbourhood.nodes[reply["id"]] = reply["node"]
-            client_heartbeat()
+            MyNode.neighbourhood.check_complete()
+            if is_new:
+                measure_latency()
+                client_heartbeat()
             log("lookup", "node"+str(reply["id"])+"->"+str(reply["node"]))
         else:
             print "DNS reply did not contain node data"
@@ -195,13 +238,20 @@ class ClientService(object):
             for nodeID,node in MyNode.neighbourhood.nodes.items():
                 if "host" in node:
                     send_msg(node, reply)
-            log("overlay", str(MyNode.overlay.nodes))
+            try:
+                log("overlay", str(MyNode.overlay.view()))
+            except:
+                traceback.print_exc()
+
 
     def RoutedMessage(self, pkg):
         print pkg
         if "route" in pkg and "data" in pkg:
+            print("Forward routed message")
             del pkg["route"][0]
             if len(pkg["route"]) == 1 and pkg["route"][0] in MyNode.neighbourhood.nodes:
+                print("forward to neighbour")
+                print(pkg["data"])
                 send_msg(MyNode.neighbourhood.nodes[pkg["route"][0]], pkg["data"])
             elif pkg["route"][0] in MyNode.neighbourhood.nodes:
                 send_msg(MyNode.neighbourhood.nodes[pkg["route"][0]], pkg)
@@ -213,8 +263,14 @@ class ClientService(object):
             print "Wrong format"
             return {"command" : "error", "reason" : "Wrong format"}
 
-    def Reply(self, pkg):
-        pass
+    def Reply(self, data):
+        global MyNode
+        print("ROUTET MESSAGE RECEIVED!!")
+        if "source" in data:
+            msg = {"command" : "ok"}
+            send_routed_msg(data["source"], msg)
+        else:
+            log("error", "invalid Reply message")
 
     def Debug(self, data):
         print data
@@ -337,7 +393,7 @@ class UDPClient(DatagramProtocol):
         s = datagram.split(":")
         t = gettime() - float(s[1])
         MyNode.neighbourhood.pings[s[0]] = t
-        log("ping", "Ping to "+s[0]+" in "+str(t)+"ms")
+        log("Debug", "Ping to "+s[0]+" in "+str(t)+"ms")
 
     def sendDatagram(self):
         msg = str(self.nodeID)+":"+str(gettime())
@@ -369,15 +425,32 @@ def send_msg(address, msg):
 # send_routed_msg([2,3], message)
 # Message should contain a command so that node3 knows
 # what to do with it. It is essentially ekvivalent to send_msg method above.
-def send_routed_msg(id, msg):
+def send_routed_msg(route, msg):
     global MyNode
-    if len(id) == 1:
-        return send_msg(MyNode.neighbourhood.nodes[id[0]], request)
-    route = MyNode.overlay.route[id]
-    del route[MyNode.id]
+    if MyNode.id in route:
+        del route[MyNode.id]
+    if len(route) == 1:
+        return send_msg(MyNode.neighbourhood.nodes[route[0]], request)
     request = {"command" : "route", "route" : route, "source" : MyNode.id,
             "data" : msg}
     send_msg(MyNode.neighbourhood.nodes[route[0]], request)
+
+def send_msg_to_node(nodeID, msg):
+    global MyNode
+    routes = MyNode.overlay.route
+    if nodeID in routes:
+        r = routes[nodeID]
+        print(r)
+        if len(r) == 0 or not r[0] == MyNode.id:
+            log("error", "invalid route")
+        else:
+            if len(r) == 1:
+                send_msg(MyNode.overlay.nodes[nodeID], msg)
+            else:
+                del r[0]
+                r.append(nodeID)
+                send_routed_msg(r, msg)
+    log("Debug", "No route to send message")
 
 def error_callback(s):
     log("Debug", "Error in sending message: %s " % str(s))
@@ -395,11 +468,29 @@ def log(event, desc):
     data["id"] = MyNode.id
     send_msg(MyNode.monitor, data)
 
+def alive_heartbeat():
+    global MyNode
+    for node,item in MyNode.overlay.last_msg.items():
+        if MyNode.overlay.last_msg[node] + (MyNode.TIMEOUT*10000) < gettime():
+            # assume node is dead
+            MyNode.overlay.delete(node)
+
+def route_msg_heartbeat():
+    global MyNode
+    source = "1"
+    dest = "3"
+    if MyNode.id == source:
+        log("routed_msg", "Send msg from node"+source+" to node"+dest)
+        k = 'a'*1000
+        print("ROUTED MSG SENT")
+        msg = {"command":"reply","time":str(gettime()), "load":k}
+        send_msg_to_node(dest, msg)
+
 #Ping call to measure the latency (called periodically by
 # the reactor through LoopingCall)
 def measure_latency():
     global MyNode
-    log("Measure latency", "Sending ping to %d neighbours: %s" %
+    log("Debug", "Measure latency: Sending ping to %d neighbours: %s" %
             (len(MyNode.neighbourhood.nodes),
                 str(MyNode.neighbourhood.nodes.keys())))
     for nodeID, node in MyNode.neighbourhood.nodes.items():
@@ -413,6 +504,8 @@ def measure_latency():
 #   Send alive message
 def client_heartbeat():
     global MyNode
+    if not MyNode.neighbourhood.is_complete:
+        MyNode.neighbourhood.lookup()
     # send heartbeat msg to all neighbours
     log("Heartbeat", "Heartbeat node"+str(MyNode.id))
     msg = {"command":"heartbeat","source":MyNode.id,\
@@ -483,10 +576,12 @@ def main():
     d.addErrback(monitor_not_reachable)
 
     # refresh addresses periodically
-    LoopingCall(MyNode.neighbourhood.lookup).start(30)
-    LoopingCall(client_heartbeat).start(6)
-    LoopingCall(measure_latency).start(2)
-    LoopingCall(monitor_heartbeat).start(5)
+    LoopingCall(MyNode.neighbourhood.lookup).start(MyNode.LOOKUP)
+    LoopingCall(client_heartbeat).start(MyNode.HEARTBEAT)
+    LoopingCall(measure_latency).start(MyNode.PING)
+    LoopingCall(monitor_heartbeat).start(MyNode.HEARTBEAT)
+    LoopingCall(alive_heartbeat).start(MyNode.HEARTBEAT)
+    LoopingCall(route_msg_heartbeat).start(MyNode.PING)
 
     reactor.run()
 
