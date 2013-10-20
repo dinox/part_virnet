@@ -134,7 +134,7 @@ class Overlay(object):
             log("error", "Exception in Overlay.delete()")
             traceback.print_exc()
         self.dijkstra_dist()
-        log(state, "node"+node)
+        log("Debug", state+ " node"+node)
         print(state.upper() + " node"+node)
 
     def view(self):
@@ -148,7 +148,7 @@ class Overlay(object):
     def update_node(self, node, neighbours, sqn):
         node = str(node)
         if not node in self.nodes:
-            log("join", "node"+node)
+            log("Debug", "join node"+node)
             print("JOIN node"+node)
         n = MyNode.neighbourhood.nodes
         if node in n and not "host" in n[node]:
@@ -305,7 +305,6 @@ class ClientService(object):
 
     def Leave(self, data):
         global MyNode
-        print("YESSSSSSSS**************")
         MyNode.overlay.delete(data["id"], "leave")
 
 
