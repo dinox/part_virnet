@@ -59,6 +59,9 @@ class Monitor(object):
             if node["stable"]:
                 stable.append(int(node["id"]))
         return stable
+    def set_all_nostable(self):
+        for node in self.nodes:
+            node["stable"] = False
 
     def add_node(self, id, node):
         node["alive"] = True
@@ -86,7 +89,7 @@ class Monitor(object):
         return None
 
     def view_is_same_as(self, other):
-        return self.alive_nodes() == list(set(other) & set(self.alive_nodes()))
+        return self.alive_nodes() == other
 
 class MonitorService(object):
 
@@ -143,8 +146,9 @@ class MonitorService(object):
         if "id" in data and "nodes" in data:
             if self.monitor.view_is_same_as(map(int, data["nodes"])):
                 self.monitor.get_node(data["id"])["stable"] = True
+                Logger.log_self("stable", "node%s is stable" % data["id"])
             else:
-                self.monitor.get_node(data["id"])["stable"] = True
+                self.monitor.get_node(data["id"])["stable"] = False
         return json.dumps({"command" : "ok"})
 
     commands = { "lookup"   : DNS_Lookup,
@@ -211,40 +215,41 @@ def main():
 
     def alive_nodes():
         for node in monitor.nodes:
-            if node["ping"] < time.time() - 5:
+            if node["alive"] and node["ping"] < time.time() - 5:
                 node["alive"] = False
+                monitor.set_all_nostable()
+                monitor.stable = False
 
     def log_status():
-        Logger.log_self("status", "DNS nodes: %s" %
-                str(monitor.nodes))
-        Logger.log_self("status", "Alive nodes: %s" %
-                str(monitor.alive_nodes()))
-        Logger.log_self("status", "Stable nodes: %s" %
-                str(monitor.stable_nodes()))
+        Logger.log_self("status", "%d alive nodes: %s" %
+                (len(monitor.alive_nodes()), str(monitor.alive_nodes())))
+        Logger.log_self("status", "%d stable nodes: %s" %
+                (len(monitor.stable_nodes()), str(monitor.stable_nodes())))
 
     def stable_network():
-        if not monitor.stable:
+        global inited
+        if not monitor.stable and inited and len(monitor.nodes):
             if monitor.alive_nodes() == monitor.stable_nodes():
+                Logger.log_self("stable", "network is now stable")
                 stable = True
                 send_signal()
 
     def send_signal():
-        f = open("startup.pid", 'w')
+        f = open("startup.pid", 'r')
         try:
             n = int(f.read())
-            os.kill(n, 1)
+            os.kill(n, signal.SIGUSR1)
         except:
             pass
 
     def network_inited():
         global inited
         if not inited and len(monitor.nodes) == 15:
-            send_signal()
             inited = True
 
-    LoopingCall(log_status).start(10)
+    LoopingCall(log_status).start(5)
     LoopingCall(alive_nodes).start(1)
-    LoopingCall(stable_network).start(1)
+    LoopingCall(stable_network).start(0.1)
     LoopingCall(network_inited).start(1)
 
     reactor.run()

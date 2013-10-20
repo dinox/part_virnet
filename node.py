@@ -256,6 +256,8 @@ class ClientService(object):
                 if "host" in node:
                     send_msg(node, reply)
             try:
+                print MyNode.overlay.view()
+                print MyNode.overlay.nodes 
                 msg = {"command" : "overlay_view", "id" : MyNode.id, "nodes":\
                         MyNode.overlay.view()}
                 send_msg(MyNode.monitor, msg)
@@ -500,6 +502,7 @@ def log(event, desc):
     data["time"] = time.strftime("%H:%M:%S")
     data["command"] = "log_msg"
     data["id"] = MyNode.id
+    print("Send log to monitor: %s" % data)
     send_msg(MyNode.monitor, data)
 
 def alive_heartbeat():

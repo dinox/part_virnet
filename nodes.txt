@@ -2,7 +2,7 @@
 5:planetlab05.mpi-sws.mpg.de
 6:planetlab1.s3.kth.se
 9:planetlab2.s3.kth.se
-13:planetlab02.tkn.tu-berlin.de
+13:planet1.inf.tu-dresden.de
 2:planetlab6.cs.cornell.edu
 3:planetlab1.cs.uml.edu
 7:planetlab01.cs.washington.edu

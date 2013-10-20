@@ -10,6 +10,7 @@ p = open("startup_config.json", "r")
 conf = json.loads(p.read())
 username = conf["username"]
 path_to_keyfile = conf["path_to_keyfile"]
+logfile = open("kill.log", "w")
 
 nodes = []
 f = open("nodes.txt", "r")
@@ -46,7 +47,7 @@ def start_node(node):
     remote["chmod"]("u+x", "node")
     print "[%s]Starting python node..." % node["id"]
     try:
-        print remote["./node"]("--id", "%s" % (node["id"]), "--neighbours", 
+        remote["./node"]("--id", "%s" % (node["id"]), "--neighbours", 
                 json.dumps(neighbourhood[node["id"]]),
                 "erikhenriksson.se:12345")
     except commands.processes.ProcessExecutionError as e:
@@ -71,6 +72,7 @@ def kill_node(node):
 
 
 def kill_script(nodes):
+    global logfile
     print "Waiting for network to initialize"
     wait_for_signal()
     print "Start killing nodes..."
@@ -80,10 +82,12 @@ def kill_script(nodes):
         wait_for_signal()
         end = time.time()
         print "Kill node%s: Network reaction time: %.3f seconds" % (node["id"], end-begin)
+        logfile.write("%.3f:%s\n" % (end-begin, node["id"]))
         Process(target=start_node, args=(node,)).start()
         begin = time.time()
         wait_for_signal()
         end = time.time()
+        logfile.write("%.3f:%s\n" % (end-begin, node["id"]))
         print "Start node%s: Network reaction time: %.3f seconds" % (node["id"], end-begin)
 
 def wait_for_signal():
