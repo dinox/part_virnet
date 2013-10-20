@@ -44,19 +44,24 @@ class MonitorService(object):
         self.pings = dict()
 
     def DNS_Lookup(self, data):
-        if "id" in data and data["id"] in self.monitor.nodes:
-            return json.dumps({"command" : "dns_reply", "node" :
-                self.monitor.nodes[data["id"]], "id" : data["id"]})
-        else:
-            return json.dumps({"command" : "error", "reason" : "id does not " +
-                                "exist"})
+        try:
+            if "id" in data and data["id"] in self.monitor.nodes:
+                return json.dumps({"command" : "dns_reply", "node" :
+                    self.monitor.nodes[data["id"]], "id" : data["id"]})
+            else:
+                return json.dumps({"command" : "dns_fail", "reason" : "id does not " +
+                    "exist", "id" : data["id"]})
+        except Exception as e:
+            print("Exception in DNS_Loopup: "+e)
+            return json.dumps({"command" : "error", "reason" : e})
 
     def DNS_Map(self, data):
         if "id" in data and "node" in data:
             try:
                 self.monitor.nodes[data["id"]] = data["node"]
-            except:
-                return json.dumps({"command" : "error", "reason" : ""})
+            except Exception as e:
+                print("Exception in DNS_Map: " + e)
+                return json.dumps({"command" : "error", "reason" : e})
             Logger.log_self("New node", "Added node%s to DNS list" % data["id"])
             return json.dumps({"command" : "ok"})
         return json.dumps({"command" : "error", "reason" : "No id or no node in " +

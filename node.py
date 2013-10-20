@@ -31,12 +31,6 @@ class Node(object):
 
 MyNode = Node()
 
-# global output file names
-LOG_FILE = "overlay.log"
-LATENCY_FILE = "latency.log"
-PINGS_FILE = "pings.log"
-EXCEPTION_FILE = "exceptions.log"
-
 def parse_args():
     usage = """usage: %prog [options] [hostname]:port
     Specify hostname and port of monitor node.
@@ -95,10 +89,6 @@ class Neighbourhood(object):
         from twisted.internet import reactor
         for nodeID, node in self.nodes.items():
             send_msg(MyNode.monitor, {"command" : "lookup", "id" : nodeID})
-
-
-    def add_node():
-        log_status("Neighbourhood lookup")
 
 class Overlay(object):
     nodes = dict()
@@ -175,9 +165,12 @@ class ClientService(object):
         global MyNode
         if "node" in reply:
             MyNode.neighbourhood.nodes[reply["id"]] = reply["node"]
-            log_lookup(reply["id"], reply["node"])
+            log("lookup", "node"+str(reply["id"])+"->"+str(reply["node"]))
         else:
             print "DNS reply did not contain node data"
+
+    def DNS_Fail(self, reply):
+        log("lookup", "node"+str(reply["id"])+" is not alive")
 
     def Error(self, reply):
         if "reason" in reply:
@@ -193,7 +186,7 @@ class ClientService(object):
             for nodeID,node in MyNode.neighbourhood.nodes.items():
                 if "host" in node:
                     send_msg(node, reply)
-            log_overlay()
+            log("overlay", str(MyNode.overlay.nodes))
 
     def RoutedMessage(self, pkg):
         print pkg
@@ -219,6 +212,7 @@ class ClientService(object):
     commands = {"ok"    : OK,
                 "error" : Error,
                 "dns_reply" : DNS_Reply,
+                "dns_fail"  : DNS_Fail,
                 "heartbeat" : Heartbeat,
                 "route"     : RoutedMessage,
                 "debug"     : Debug     }
@@ -330,7 +324,7 @@ class UDPClient(DatagramProtocol):
         s = datagram.split(":")
         t = self.time() - float(s[1])
         MyNode.neighbourhood.pings[int(s[0])] = t
-#TODO: log pings
+        log("ping", "Ping to "+s[0]+" in "+str(t)+"ms")
 
     def sendDatagram(self):
         msg = str(self.nodeID)+":"+str(time.time())
@@ -360,9 +354,9 @@ def send_msg(address, msg):
 # Message should contain a command so that node3 knows
 # what to do with it. It is essentially ekvivalent to send_msg method above.
 def send_routed_msg(id, msg):
+    global MyNode
     if len(id) == 1:
         return send_msg(MyNode.neighbourhood.nodes[id[0]], request)
-    global MyNode
     route = MyNode.overlay.route[id]
     del route[MyNode.id]
     request = {"command" : "route", "route" : route, "source" : MyNode.id,
@@ -371,89 +365,6 @@ def send_routed_msg(id, msg):
 
 def error_callback(s):
     log("Debug", "Error in sending message: %s " % str(s))
-
-# Log functions
-
-def log_status(msg):
-    global LOG_FILE
-    msg = "    " + msg
-    filename = LOG_FILE
-    log_timestamp(filename)
-    f = open(filename, "a")
-    f.write(msg + "\n")
-    f.close()
-    print(msg)
-
-def log_overlay():
-    global LOG_FILE
-    filename = LOG_FILE
-    log_timestamp(filename)
-    log_members(filename)
-
-def log_lookup(node, address):
-    global LOG_FILE
-    filename = LOG_FILE
-    log_timestamp(filename)
-    tab = "    "
-    msg = tab + "[LOOKUP]: node" + str(node) + "->" + address["host"]+\
-            ":" + str(address["tcp_port"])
-    f = open(filename, "a")
-    f.write(msg + "\n")
-    print(msg)
-    f.close()
-
-def log_timestamp(filename):
-    f = open(filename, "a")
-    msg = time.strftime("%Y/%m/%d %H:%M:%S") + ":"
-    f.write(msg + "\n")
-    print(msg)
-    f.close()
-
-def log_members(filename):
-    global MyNode
-    f = open(filename, "a")
-    tab = "    "
-    dtab = tab + tab
-    msg = "[OVERLAY]: node" + str(MyNode.id)
-    f.write(msg + "\n")
-    print(msg)
-    for node in MyNode.overlay.nodes:
-        msg = dtab + "node" + str(node) + "[sqn:" +\
-                str(MyNode.overlay.nodes[node]) +\
-                ",t:" + str(MyNode.overlay.last_msg[node]) + "]: "+\
-                str(MyNode.overlay.edges[node])
-        f.write(msg + "\n")
-        print(msg)
-    f.close()
-
-def log_latency(nodeID, new_latency):
-    global pings, my_id, LATENCY_FILE
-    f = open(LATENCY_FILE, "a")
-    msg = "["+str(my_id)+", "+str(nodeID)+", "+str(new_latency)+\
-            ", "+str(pings[nodeID])+", "+str(time.time())+"]"
-    f.write(msg+"\n")
-    f.close()
-    print(msg)
-
-def log_pings(ping_list, sourceID):
-    global PINGS_FILE
-    f = open(PINGS_FILE, "a")
-    print("LOG PINGS: ")
-    for destID, line in ping_list.items():
-        msg = "[" + str(sourceID) + ", " + str(destID) + ", " + \
-                str(line) + "]"
-        f.write(msg + "\n")
-        print(msg)
-    f.close()
-
-def log_exception(info, exception):
-    global EXCEPTION_FILE
-    f = open(EXCEPTION_FILE, "a")
-    msg = time.strftime("%Y/%m/%d %H:%M:%S") + ": " + info + "\n"
-    msg = msg + "    " + str(exception)
-    print(msg)
-    f.write(msg + "\n")
-    f.close()
 
 # Monitor logger function
 # No linebreaks in event or desc!
@@ -472,10 +383,6 @@ def log(event, desc):
 # the reactor through LoopingCall)
 def measure_latency():
     global MyNode
-    log_status("MEASURE LATENCY")
-    print(MyNode.neighbourhood.nodes)
-#TODO: Add something funnier than a empty string here (but dont clutter down the
-#      log window
     log("Measure latency", "Sending ping to %d neighbours: %s" %
             (len(MyNode.neighbourhood.nodes),
                 str(MyNode.neighbourhood.nodes.keys())))
@@ -491,7 +398,7 @@ def measure_latency():
 def client_heartbeat():
     global MyNode
     # send heartbeat msg to all neighbours
-    log_status("Client Heartbeat")
+    log("Heartbeat", "Heartbeat node"+str(MyNode.id))
     msg = {"command":"heartbeat","source":MyNode.id,\
             "sequence":MyNode.get_sqn(),"neighbours":\
             MyNode.neighbourhood.pings}
@@ -534,9 +441,6 @@ def main():
         MyNode.neighbourhood = Neighbourhood([0,1,2])
 
     from twisted.internet.task import LoopingCall
-
-    log_status("Startup node" + str(MyNode.id) + " with tcp address " +\
-            str(MyNode.host)+":"+str(MyNode.tcp_port))
 
     # initialize UDP socket
     listen_udp = reactor.listenUDP(MyNode.udp_port, UDPServer(), interface=MyNode.host)
