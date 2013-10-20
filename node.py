@@ -256,7 +256,9 @@ class ClientService(object):
                 if "host" in node:
                     send_msg(node, reply)
             try:
-                log("Debug", "overlay "+ str(MyNode.overlay.view()))
+                msg = {"command" : "overlay_view", "id" : MyNode.id, "nodes":\
+                        str(MyNode.overlay.view()}
+                send_msg(MyNode.monitor, msg)
             except:
                 traceback.print_exc()
 
@@ -510,8 +512,8 @@ def alive_heartbeat():
 
 def route_msg_heartbeat():
     global MyNode
-    source = "1"
-    dest = "3"
+    source = MyNode.route_src
+    dest = MyNode.route_dst
     # set the size of the package, switch flag (next time the other size will be
     # sent)
     size = 1000
