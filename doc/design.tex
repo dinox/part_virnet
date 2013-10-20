@@ -1,0 +1,159 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Short Sectioned Assignment
+% LaTeX Template
+% Version 1.0 (5/5/12)
+%
+% This template has been downloaded from:
+% http://www.LaTeXTemplates.com
+%
+% Original author:
+% Frits Wenneker (http://www.howtotex.com)
+%
+% License:
+% CC BY-NC-SA 3.0 (http://creativecommons.org/licenses/by-nc-sa/3.0/)
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%----------------------------------------------------------------------------------------
+%	PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
+%----------------------------------------------------------------------------------------
+
+\documentclass[paper=a4, fontsize=11pt]{scrartcl} % A4 paper and 11pt font size
+
+\usepackage[T1]{fontenc} % Use 8-bit encoding that has 256 glyphs
+\usepackage{fourier} % Use the Adobe Utopia font for the document - comment this line to return to the LaTeX default
+\usepackage[english]{babel} % English language/hyphenation
+\usepackage{amsmath,amsfonts,amsthm} % Math packages
+\usepackage[pdftex]{graphicx}
+\graphicspath{{./}}
+
+\usepackage{lipsum} % Used for inserting dummy 'Lorem ipsum' text into the template
+
+\usepackage{sectsty} % Allows customizing section commands
+\allsectionsfont{\centering \normalfont\scshape} % Make all sections centered, the default font and small caps
+
+\usepackage{fancyhdr} % Custom headers and footers
+\pagestyle{fancyplain} % Makes all pages in the document conform to the custom headers and footers
+\fancyhead{} % No page header - if you want one, create it in the same way as the footers below
+\fancyfoot[L]{} % Empty left footer
+\fancyfoot[C]{} % Empty center footer
+\fancyfoot[R]{\thepage} % Page numbering for right footer
+\renewcommand{\headrulewidth}{0pt} % Remove header underlines
+\renewcommand{\footrulewidth}{0pt} % Remove footer underlines
+\setlength{\headheight}{13.6pt} % Customize the height of the header
+
+\numberwithin{equation}{section} % Number equations within sections (i.e. 1.1, 1.2, 2.1, 2.2 instead of 1, 2, 3, 4)
+\numberwithin{figure}{section} % Number figures within sections (i.e. 1.1, 1.2, 2.1, 2.2 instead of 1, 2, 3, 4)
+\numberwithin{table}{section} % Number tables within sections (i.e. 1.1, 1.2, 2.1, 2.2 instead of 1, 2, 3, 4)
+
+%\setlength\parindent{0pt} % Removes all indentation from paragraphs - comment this line for an assignment with lots of text
+
+%----------------------------------------------------------------------------------------
+%	TITLE SECTION
+%----------------------------------------------------------------------------------------
+
+\newcommand{\horrule}[1]{\rule{\linewidth}{#1}} % Create horizontal rule command with 1 argument of height
+
+\title{	
+\normalfont \normalsize 
+\textsc{Network Virtualization and Data Center Networks} \\ [25pt] % Your university, school and/or department name(s)
+\horrule{0.5pt} \\[0.4cm] % Thin top horizontal rule
+\huge Assignment 1: Overlay Networks Part C,D\\ % The assignment title
+\horrule{2pt} \\[0.5cm] % Thick bottom horizontal rule
+}
+
+\author{Erik Henriksson, Christoph Burkhalter} % Your name
+
+\date{\normalsize\today} % Today's date or a custom date
+
+\begin{document}
+
+\maketitle % Print the title
+
+\section{Part C}
+
+%------------------------------------------------
+
+\subsection{Design overview}
+
+The overlay network contains of two kind of nodes, a monitor node that operates as DNS lookup as well as logging node and the member nodes that participate in the overlay network.
+
+\paragraph{Maintenance channel}
+
+As in the previous assignment, there is the \textit{maintenance channel} to send message between member nodes as well as to the monitor node. All information exchange except pinging uses this channel. It runs on top of TCP and uses the twisted framework to have an event based system.
+
+\paragraph{Ping channel}
+
+To calculate the latency, the system uses again the Datagram Protocol (UDP). However, this is also implemented on top of the twisted framework.
+
+\paragraph{Event based system}
+After the initialization, everything that needs to be done is an event from twisted, either an incoming message or a LoopingCall, a method that is called periodically.
+
+%------------------------------------------------
+
+\subsection{Member node}
+
+\subsubsection{Initialization}
+
+During the initialization of a member node, the node starts listening on arbitrary TCP and UDP port and sends a DNS map message to the coordinator to join the network. Next, the node sends DNS lookup message to get the addresses of it's neighbours. Then the LoopingCall functions are registered and the initialization is done. 
+
+\subsubsection{Lookup}
+Periodically, the node sends DNS lookup message to ensure that the addresses haven't changed. Whenever a DNS lookup reply message arrives, the node updates the information. If the address was previously unknown, the node will send pings and heartbeat messages to all its neighbours.
+
+\subsection{Measure latency}
+
+As in the previous assignment, the latency is calculated for each direct neighbour. The latency measurement is done periodically as well as when a new neighbour is detected.
+
+\subsubsection{Client heartbeat}
+The client heartbeat function has two purposes. As long as not all neighbours are alive, the lookup will be call in this function to ensure a fast detection of the neighbours. Once all neighbours are known, the lookup will be only from time to time to detect changes. The other purpose of the function is to inform all members of the network about this node. For this, the node sends a message the following information: node id, sequence number and ping measurement to all direct neighbours. This message is sent to all direct members and they will forward it to their neighbours. To prevent exponential messages, each node stores the sequence number for every node in the network. Only newer messages will be forwarded and considered. This way, every node in the network will get the message (probably several times from different nodes), but the message will not be send in circles.
+
+Whenever a message arrives, a node updates it's routing table and the last\_msg time from this node.
+
+\subsubsection{Monitor heartbeat}
+Periodically, each nodes send a heartbeat message to the monitor such that the monitor has an up-to-date network overview.
+
+\subsubsection{Alive heartbeat}
+In this function, a node checks if the other nodes in the network are still alive. The last\_msg time, that was stored whenever a client heartbeat message arrived, is checked. When a certain timeout is exceeded, the node will remove the information about the node that caused the timeout. 
+
+\subsubsection{Route msg heartbeat}
+The routed messages are sent periodically as well. There is one source and one destination node defined where the message is sent. Alternately, the source node send 1KB and 10KB messages over the network that additionally contains the source id, a timestamp and a ideal time. The destination node sends a reply message that contains the same timestamp and the updated ideal time. So the source node calculates the ideal time for one way, and the destination node calculates the ideal time for the way back.
+
+This measurement is then sent to the monitor.
+
+\subsection{Monitor}
+
+\section{Part D}
+
+%------------------------------------------------
+
+\subsection{Coordinator reelection}
+The nodes keep track of when the last ping from the coordinator was received, and when a certain time has progressed (we used 25 seconds) then the coordinator is considered dead. The election of a new coordinator is done according to the following list:
+\begin{itemize}
+	\item Send a ping to the current coordinator, if he responds exit.
+	\item Take the member which has the lowest ID and ping him. If he responds, he is the new coordinator.
+	\begin{itemize}
+		\item If not, take the member with the second lowest ID and so on.
+	\end{itemize}
+	\item If I am the member with lowest ID, I am the new coordinator. Send out a member's list to all members that is still in the list.
+\end{itemize}
+
+%------------------------------------------------
+
+\subsection{Latency measurement}
+
+Every thirty seconds each node calculates the latency to every other node in the network. This is implemented in the \textit{measure\_latency} function by sending a ping message on the \textit{ping channel} to another node. Using this latency, the new average latency is calculated and both values are logged to the \textit{latency.log} file. Every minute, the nodes sends array of average latencies to the coordinator. The node logs an exception if a ping in the latency measurement fails, so this will not affect the average latency.
+
+The coordinator does exactly the same, he also uses the \textit{maintenance channel} to send the average latencies to himself every minute. The average latencies that are sent to the coordinator are logged to the \textit{pings.log} file. This file is only created at the coordinator node.
+
+\subsection{A longer trace}
+
+The log files for the longer trace were produced on Sunday, between 4 p.m. and 6 p.m. The three participants of the overlay networks are \textit{righthand.eecs.harvard.edu}, a node from the Harvard University as the American node, \textit{planetlab1.inf.ethz.ch}, a node from ETHZ as the European node and \textit{pln.zju.edu.cn}, a node form the Zhejian University as the Asian node.
+
+%\begin{figure*}[th]
+% \includegraphics[width=\textwidth]{latency_harvard_ethz.pdf}
+% \caption{Latency from Harvard to ETHZ}
+% \label{fig:latency_harvard_ethz}
+%\end{figure}
+%----------------------------------------------------------------------------------------
+
+\end{document}
