@@ -1,4 +1,4 @@
-import optparse, os, json, traceback, time, sys
+import optparse, os, json, traceback, time, sys, signal
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(SCRIPT_DIR, 'third_party', 'Twisted-13.1.0'))
@@ -9,6 +9,7 @@ from twisted.protocols.basic import NetstringReceiver
 from twisted.internet.task import LoopingCall
 
 nodes = []
+inited = False
 
 def parse_args():
     usage = """usage: %prog [options]"""
@@ -221,11 +222,26 @@ def main():
         if not monitor.stable:
             if monitor.alive_nodes() == monitor.stable_nodes():
                 stable = True
-                send_stable_msg()
+                send_signal()
+
+    def send_signal():
+        f = open("startup.pid", 'w')
+        try:
+            n = int(f.read())
+            os.kill(n, 1)
+        except:
+            pass
+
+    def network_inited():
+        global inited
+        if not inited and len(monitor.nodes) == 15:
+            send_signal()
+            inited = True
 
     LoopingCall(log_status).start(10)
     LoopingCall(alive_nodes).start(1)
     LoopingCall(stable_network).start(1)
+    LoopingCall(network_inited).start(1)
 
     reactor.run()
 

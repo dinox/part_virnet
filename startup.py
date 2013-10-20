@@ -1,6 +1,6 @@
 from plumbum import SshMachine, commands
 from multiprocessing.pool import ThreadPool as Pool
-import time, json
+import time, json, threading, signal, os
 
 # Change these
 username = "user13"
@@ -13,6 +13,9 @@ path_to_keyfile = conf["path_to_keyfile"]
 nodes = []
 f = open("nodes.txt", "r")
 n = open("neighbourhood.json", "r")
+
+k_node = 1
+got_signal = False
 
 print """ Welcome to the super startup script by
 Erik Henriksson & Christoph Burkhalter. """
@@ -43,11 +46,60 @@ def start_node(node):
     print "[%s]Starting python node..." % node["id"]
     try:
         print remote["./node"]("--id", "%s" % (node["id"]), "--neighbours", 
-                json.dumps(neighbourhood[node["id"]]), "erikhenriksson.se:12345")
+                json.dumps(neighbourhood[node["id"]]),
+                "erikhenriksson.se:12345")
     except commands.processes.ProcessExecutionError as e:
         print "[%s]Got an exception: %s" % (node["id"], e)
     remote.close()
 
+def kill_node(node):
+    print "Killing node%s" % node["id"]
+    try:
+        remote = SshMachine(node["host"], port = 22022, user = username, 
+                keyfile = path_to_keyfile)
+    except Exception as e:
+        print "Could not connect to %s: %s" % (node["host"], e)
+        return
+    remote["killall"]("node")
+    remote.close()
+    print "Node%s killed!" % node["id"]
+
+
+def kill_script():
+    global k_node, nodes
+    print "Waiting for network to initialize"
+    wait_for_signal()
+    print "Start killing nodes..."
+    for node in nodes:
+        kill_node(node)
+        begin = time.time()
+        wait_for_signal()
+        end = time.time()
+        print "Kill node%s: Network reaction time: %.3f seconds" % (node["id"], end-begin)
+        threading.Thread(start_node(node))
+        begin = time.time()
+        wait_for_signal()
+        end = time.time()
+        print "Start node%s: Network reaction time: %.3f seconds" % (node["id"], end-begin)
+
+def wait_for_signal():
+    global got_signal
+    while not got_signal:
+        time.sleep(0.01)
+
+def signal_handler(signum, frame):
+    print 'Signal handler called with signal', signum
+    global got_signal
+    got_signal = True
+
+signal.signal(signal.SIGUSR1, signal_handler)
+pid = str(os.getpid())
+pidfile = "startup.pid"
+file(pidfile, 'w').write(pid)
+print "pid = %s" % pid
+kill_th = threading.Thread(target=kill_script)
+kill_th.start()
 pool_size = 15  # your "parallelness"
 pool = Pool(pool_size)
 pool.map(start_node, nodes)
+os.unlink(pidfile)
