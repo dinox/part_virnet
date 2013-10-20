@@ -31,7 +31,7 @@ def start_node(node):
     print "[%s]Connected" % node["id"]
     print "[%s]Killing python..." % node["id"]
     try:
-        remote["killall"]("python2.7-static")
+        remote["killall"]("node")
     except Exception as e:
         print "[%s]Exception: %s" % (node["id"], e)
         print "[%s]Python could not get killed" % node["id"]

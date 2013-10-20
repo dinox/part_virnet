@@ -8,6 +8,8 @@ from twisted.internet.protocol import ServerFactory, Protocol
 from twisted.protocols.basic import NetstringReceiver
 from twisted.internet.task import LoopingCall
 
+nodes = []
+
 def parse_args():
     usage = """usage: %prog [options]"""
 
@@ -40,19 +42,52 @@ class Logger(object):
         Logger.log(time.strftime("%H:%M:%S"), "Monitor", event, desc)
 
 class Monitor(object):
-    nodes = {}
+    nodes = []
+
+    def __init__(self):
+        self.stable = True
+
+    def alive_nodes(self):
+        def alive(node):
+            return node["alive"]
+        return map(lambda n: int(n["id"]), filter(alive, self.nodes))
+
+    def stable_nodes(self):
+        stable = []
+        for node in self.nodes:
+            if node["stable"]:
+                stable.append(int(node["id"]))
+        return stable
+
+    def add_node(self, id, node):
+        node["alive"] = True
+        node["stable"] = True
+        node["id"] = int(id)
+        self.nodes.append(node)
+
+    def get_node(self, id):
+        ret = filter(lambda n: n["id"] == int(id), self.nodes)
+        if len(ret):
+            return ret[0]
+        return None
+
+    def get_lookup_node(self, id):
+        node = self.get_node(id)
+        keys = ["host", "tcp_port", "udp_port"]
+        if node:
+            return {key : node[key] for key in keys}
+        return None
 
 class MonitorService(object):
 
     def __init__(self, monitor):
         self.monitor = monitor
-        self.pings = dict()
 
     def DNS_Lookup(self, data):
         try:
-            if "id" in data and data["id"] in self.monitor.nodes:
+            if "id" in data and self.monitor.get_node(data["id"]):
                 return json.dumps({"command" : "dns_reply", "node" :
-                    self.monitor.nodes[data["id"]], "id" : data["id"]})
+                    self.monitor.get_lookup_node(data["id"]), "id" : data["id"]})
             else:
                 return json.dumps({"command" : "dns_fail", "reason" : "id does not " +
                     "exist", "id" : data["id"]})
@@ -63,7 +98,7 @@ class MonitorService(object):
     def DNS_Map(self, data):
         if "id" in data and "node" in data:
             try:
-                self.monitor.nodes[data["id"]] = data["node"]
+                self.monitor.add_node(data["id"], data["node"])
             except:
                 traceback.print_exc()
                 return json.dumps({"command" : "error", "reason" : "Eception"})
@@ -89,8 +124,17 @@ class MonitorService(object):
 
     def Heartbeat(self, data):
         Logger.log_self("Debug", str(data))
-        if "id" in data:
-            self.pings[data["id"]] = time.time()
+        if "id" in data and self.monitor.get_node(data["id"]):
+            self.monitor.get_node(data["id"])["ping"] = time.time()
+            self.monitor.get_node(data["id"])["alive"] = True
+        return json.dumps({"command" : "ok"})
+
+    def Overview(self, data):
+        if "id" in data and "nodes" in data:
+            if self.monitor.view_is_same_as(data["nodes"]):
+                self.monitor.get_node(data["id"])["stable"] = True
+            else:
+                self.monitor.get_node(data["id"])["stable"] = True
         return json.dumps({"command" : "ok"})
 
     commands = { "lookup"   : DNS_Lookup,
@@ -152,18 +196,30 @@ def main():
     from twisted.internet import reactor
     port = reactor.listenTCP(options.port or 0, factory,
                              interface=options.iface)
-    if is_debug_mode:
-        print 'Listening on %s.' % (port.getHost())
+    print 'Listening on %s.' % (port.getHost())
 
     def alive_nodes():
-        nodes = []
-        for nodeID, node in service.pings.items():
-            if node > time.time() - 30:
-                nodes.append(nodeID)
-        Logger.log_self("status", "Alive nodes: %s %d/%d" % (str(nodes),
-                        len(nodes), len(monitor.nodes)))
+        for node in monitor.nodes:
+            if node["ping"] < time.time() - 5:
+                node["alive"] = False
 
-    LoopingCall(alive_nodes).start(10)
+    def log_status():
+        Logger.log_self("status", "DNS nodes: %s" %
+                str(monitor.nodes))
+        Logger.log_self("status", "Alive nodes: %s" %
+                str(monitor.alive_nodes()))
+        Logger.log_self("status", "Stable nodes: %s" %
+                str(monitor.stable_nodes()))
+
+    def stable_network():
+        if not monitor.stable:
+            if monitor.alive_nodes() == monitor.stable_nodes():
+                stable = True
+                send_stable_msg()
+
+    LoopingCall(log_status).start(10)
+    LoopingCall(alive_nodes).start(1)
+    LoopingCall(stable_network).start(1)
 
     reactor.run()
 

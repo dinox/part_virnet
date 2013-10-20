@@ -28,40 +28,26 @@ def start_node(node):
     try:
         remote = SshMachine(node["host"], port = 22022, user = username, 
                 keyfile = path_to_keyfile)
-    except:
-        print "Could not connect to %s" % node
+    except Exception as e:
+        print "Could not connect to %s: %s" % (node["host"], e)
         return
     print "[%s]Connected" % node["id"]
     try:
-        remote["rm"]("-r", "overlay")
+        remote["rm"]("node")
     except commands.processes.ProcessExecutionError:
         pass
     print "[%s]Downloading application..." % node["id"]
-    remote["wget"]("-O", "overlay.tar.gz", 
-            "https://api.github.com/repos/dinox/part_virnet/tarball")
-    remote["tar"]("-xvzf", "overlay.tar.gz", "--transform",
-            "s/dinox-part_virnet......../overlay/")
-    remote["mv"]("overlay/node.py", ".")
-    try:
-        print "[%s]Downloading python..." % node["id"]
-        remote["wget"]("-O", "python2.7-static",
-                "http://pts-mini-gpl.googlecode.com/svn/trunk/staticpython/release/python2.7-static")
-        remote["chmod"]("u+x",  "python2.7-static")
-        print "[%s]Getting Twisted..." % node["id"]
-        remote["wget"]("-O", "py2.7-twisted.tar.gz", 
-                "https://www.dropbox.com/s/4ftmk62rh9py7yj/py2.7-twisted.tar.gz")
-        remote["tar"]("-xvzf", "py2.7-twisted.tar.gz")
-    except:
-        print "[%s]Got an exception, continue with fingers crossed" % node["id"]
+    remote["wget"]("-O", "node", 
+            "https://www.dropbox.com/s/mjw7dic2ywk5jrp/node")
+    remote["chmod"]("u+x", "node")
     print "[%s]Starting python node..." % node["id"]
     try:
-        print remote["./python2.7-static"]("node.py", 
-                "--id", "%s" % (node["id"]), "--neighbours", 
+        print remote["./node"]("--id", "%s" % (node["id"]), "--neighbours", 
                 json.dumps(neighbourhood[node["id"]]), "erikhenriksson.se:12345")
     except commands.processes.ProcessExecutionError as e:
         print "[%s]Got an exception: %s" % (node["id"], e)
     remote.close()
 
-pool_size = 1  # your "parallelness"
+pool_size = 15  # your "parallelness"
 pool = Pool(pool_size)
 pool.map(start_node, nodes)
