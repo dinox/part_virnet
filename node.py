@@ -81,6 +81,7 @@ def parse_args():
 class Neighbourhood(object):
     nodes = dict()
     pings = dict()
+    is_complete = False
 
     def __init__(self, vir_nodes):
         global MyNode
@@ -93,6 +94,13 @@ class Neighbourhood(object):
         global MyNode
         for nodeID, node in self.nodes.items():
             send_msg(MyNode.monitor, {"command" : "lookup", "id" : nodeID})
+
+    def check_complete(self):
+        self.is_complete = True
+        for node in self.nodes:
+            if self.nodes[node] == {}:
+                self.is_complete = False
+                return
 
 class Overlay(object):
     nodes = dict()
@@ -198,8 +206,17 @@ class ClientService(object):
     def DNS_Reply(self, reply):
         global MyNode
         if "node" in reply:
+            is_new = True
+            try:
+                if "host" in MyNode.neighbourhood.nodes[reply["id"]]:
+                    is_new = False
+            except:
+                pass
             MyNode.neighbourhood.nodes[reply["id"]] = reply["node"]
-            client_heartbeat()
+            MyNode.neighbourhood.check_complete()
+            if is_new:
+                measure_latency()
+                client_heartbeat()
             log("lookup", "node"+str(reply["id"])+"->"+str(reply["node"]))
         else:
             print "DNS reply did not contain node data"
@@ -230,8 +247,11 @@ class ClientService(object):
     def RoutedMessage(self, pkg):
         print pkg
         if "route" in pkg and "data" in pkg:
+            print("Forward routed message")
             del pkg["route"][0]
             if len(pkg["route"]) == 1 and pkg["route"][0] in MyNode.neighbourhood.nodes:
+                print("forward to neighbour")
+                print(pkg["data"])
                 send_msg(MyNode.neighbourhood.nodes[pkg["route"][0]], pkg["data"])
             elif pkg["route"][0] in MyNode.neighbourhood.nodes:
                 send_msg(MyNode.neighbourhood.nodes[pkg["route"][0]], pkg)
@@ -245,6 +265,7 @@ class ClientService(object):
 
     def Reply(self, data):
         global MyNode
+        print("ROUTET MESSAGE RECEIVED!!")
         if "source" in data:
             msg = {"command" : "ok"}
             send_routed_msg(data["source"], msg)
@@ -404,12 +425,12 @@ def send_msg(address, msg):
 # send_routed_msg([2,3], message)
 # Message should contain a command so that node3 knows
 # what to do with it. It is essentially ekvivalent to send_msg method above.
-def send_routed_msg(id, msg):
+def send_routed_msg(route, msg):
     global MyNode
-    if len(id) == 1:
-        return send_msg(MyNode.neighbourhood.nodes[id[0]], request)
-    route = MyNode.overlay.route[id]
-    del route[MyNode.id]
+    if MyNode.id in route:
+        del route[MyNode.id]
+    if len(route) == 1:
+        return send_msg(MyNode.neighbourhood.nodes[route[0]], request)
     request = {"command" : "route", "route" : route, "source" : MyNode.id,
             "data" : msg}
     send_msg(MyNode.neighbourhood.nodes[route[0]], request)
@@ -459,7 +480,11 @@ def route_msg_heartbeat():
     source = "1"
     dest = "3"
     if MyNode.id == source:
-        send_msg_to_node(dest, "me")
+        log("routed_msg", "Send msg from node"+source+" to node"+dest)
+        k = 'a'*1000
+        print("ROUTED MSG SENT")
+        msg = {"command":"reply","time":str(gettime()), "load":k}
+        send_msg_to_node(dest, msg)
 
 #Ping call to measure the latency (called periodically by
 # the reactor through LoopingCall)
@@ -479,6 +504,8 @@ def measure_latency():
 #   Send alive message
 def client_heartbeat():
     global MyNode
+    if not MyNode.neighbourhood.is_complete:
+        MyNode.neighbourhood.lookup()
     # send heartbeat msg to all neighbours
     log("Heartbeat", "Heartbeat node"+str(MyNode.id))
     msg = {"command":"heartbeat","source":MyNode.id,\
