@@ -85,6 +85,9 @@ class Monitor(object):
             return {key : node[key] for key in keys}
         return None
 
+    def view_is_same_as(self, other):
+        return self.alive_nodes() == list(set(other) & set(self.alive_nodes()))
+
 class MonitorService(object):
 
     def __init__(self, monitor):
@@ -138,7 +141,7 @@ class MonitorService(object):
 
     def Overview(self, data):
         if "id" in data and "nodes" in data:
-            if self.monitor.view_is_same_as(data["nodes"]):
+            if self.monitor.view_is_same_as(map(int, data["nodes"])):
                 self.monitor.get_node(data["id"])["stable"] = True
             else:
                 self.monitor.get_node(data["id"])["stable"] = True
