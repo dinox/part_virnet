@@ -1,11 +1,9 @@
 from plumbum import SshMachine, commands
 from multiprocessing.pool import ThreadPool as Pool
 from multiprocessing import Process, Array, Value
-import time, json, threading, signal, os
+import time, json, threading, signal, os, optparse
 
 # Change these
-username = "user13"
-path_to_keyfile = "/Users/erik/.ssh/user13"
 p = open("startup_config.json", "r")
 conf = json.loads(p.read())
 username = conf["username"]
@@ -19,8 +17,35 @@ n = open("neighbourhood.json", "r")
 k_node = 1
 got_signal = False
 
-print """ Welcome to the super startup script by
+def parse_args():
+    usage = """usage: %prog [options] monitor:port
+Welcome to the super startup script by
 Erik Henriksson & Christoph Burkhalter. """
+
+    parser = optparse.OptionParser(usage)
+
+    help = "Kill nodes in order"
+    parser.add_option('-k', '--kill', action="store_true", help=help)
+
+    options, address = parser.parse_args()
+
+    if not address :
+        print parser.format_help()
+        parser.exit()
+
+    def parse_address(addr):
+        if ':' not in addr:
+            host = '127.0.0.1'
+            port = addr
+        else:
+            host, port = addr.split(':', 1)
+
+        if not port.isdigit():
+            parser.error('Ports must be integers.')
+
+        return {"host" : host, "tcp_port" : int(port)}
+
+    return options, parse_address(address[0])
 
 for line in f:
     s = line.strip().split(":")
@@ -49,7 +74,7 @@ def start_node(node):
     try:
         remote["./node"]("--id", "%s" % (node["id"]), "--neighbours", 
                 json.dumps(neighbourhood[node["id"]]),
-                "erikhenriksson.se:12345")
+                "%s:%s" % (monitor["host"], monitor["tcp_port"]))
     except commands.processes.ProcessExecutionError as e:
         print "[%s]Got an exception: %s" % (node["id"], e)
     remote.close()
@@ -102,6 +127,7 @@ def signal_handler(signum, frame):
     print 'Signal handler called with signal', signum
     got_signal = True
 
+o, monitor = parse_args()
 signal.signal(signal.SIGUSR1, signal_handler)
 pid = str(os.getpid())
 pidfile = "startup.pid"
