@@ -140,7 +140,7 @@ class Overlay(object):
     def view(self):
         global MyNode
         l = []
-        for node in self.nodes:
+        for node, _ in self.nodes.items():
             l.append(node)
         l.append(MyNode.id)
         return l
@@ -260,6 +260,7 @@ class ClientService(object):
                 print MyNode.overlay.nodes 
                 msg = {"command" : "overlay_view", "id" : MyNode.id, "nodes":\
                         MyNode.overlay.view()}
+                log("Debug", "overlay_view " +str(MyNode.overlay.view()))
                 send_msg(MyNode.monitor, msg)
             except:
                 traceback.print_exc()

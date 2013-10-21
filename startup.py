@@ -63,7 +63,7 @@ def kill_node(node):
         print "Could not connect to %s: %s" % (node["host"], e)
         return
     try:
-        remote["killall"]("node")
+        print remote["killall"]("node")
     except:
         print "Could not kill node%s" % node["id"]
     else:
@@ -84,6 +84,7 @@ def kill_script(nodes):
         print "Kill node%s: Network reaction time: %.3f seconds" % (node["id"], end-begin)
         logfile.write("%.3f:%s\n" % (end-begin, node["id"]))
         Process(target=start_node, args=(node,)).start()
+        time.sleep(5) # Wait for node download
         begin = time.time()
         wait_for_signal()
         end = time.time()

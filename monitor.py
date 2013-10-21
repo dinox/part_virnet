@@ -46,7 +46,7 @@ class Monitor(object):
     nodes = []
 
     def __init__(self):
-        self.stable = True
+        self.stable = False
 
     def alive_nodes(self):
         def alive(node):
@@ -89,7 +89,15 @@ class Monitor(object):
         return None
 
     def view_is_same_as(self, other):
-        return self.alive_nodes() == other
+        ret = False
+        other = map(int, other)
+        for i in self.alive_nodes():
+            if i not in other:
+                return False
+        for i in other:
+            if i not in self.alive_nodes():
+                return False
+        return True
 
 class MonitorService(object):
 
@@ -146,7 +154,6 @@ class MonitorService(object):
         if "id" in data and "nodes" in data:
             if self.monitor.view_is_same_as(map(int, data["nodes"])):
                 self.monitor.get_node(data["id"])["stable"] = True
-                Logger.log_self("stable", "node%s is stable" % data["id"])
             else:
                 self.monitor.get_node(data["id"])["stable"] = False
         return json.dumps({"command" : "ok"})
@@ -215,7 +222,7 @@ def main():
 
     def alive_nodes():
         for node in monitor.nodes:
-            if node["alive"] and node["ping"] < time.time() - 5:
+            if node["alive"] and node["ping"] < time.time() - 11:
                 node["alive"] = False
                 monitor.set_all_nostable()
                 monitor.stable = False
@@ -230,8 +237,7 @@ def main():
         global inited
         if not monitor.stable and inited and len(monitor.nodes):
             if monitor.alive_nodes() == monitor.stable_nodes():
-                Logger.log_self("stable", "network is now stable")
-                stable = True
+                monitor.stable = True
                 send_signal()
 
     def send_signal():
@@ -247,7 +253,7 @@ def main():
         if not inited and len(monitor.nodes) == 15:
             inited = True
 
-    LoopingCall(log_status).start(5)
+    LoopingCall(log_status).start(1)
     LoopingCall(alive_nodes).start(1)
     LoopingCall(stable_network).start(0.1)
     LoopingCall(network_inited).start(1)
