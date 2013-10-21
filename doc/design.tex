@@ -125,14 +125,15 @@ This measurement is then sent to the monitor.
 TODO: describe
 
 \subsection{Scripts}
-
-TODO: describe
-
+We use plumbum to ssh-connect to the nodes and start them. The nodeshas no interaction with this script, is is essentially same as manually start the nodes.
 \subsubsection{Startscript}
+The startup script connects to all nodes described in the nodes.txt file and starts them. Each nodes connects to dropbox with wget, downloads a compiled python binary and runs that. 
 
 \subsubsection{Shutdown script}
+The shutdown script connects to all nodes described in the nodes.txt file and shuts them down. It does this with the killall command.
 
 \subsubsection{Reaction time script}
+When enabled, this shuts down the nodes in a specific manner described in problem formulation. It times from node kill to 
 
 \section{Part D}
 
