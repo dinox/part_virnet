@@ -11,6 +11,8 @@ from twisted.internet.task import LoopingCall
 nodes = []
 inited = False
 
+reaction_time = -1
+
 def parse_args():
     usage = """usage: %prog [options]"""
 
@@ -89,15 +91,7 @@ class Monitor(object):
         return None
 
     def view_is_same_as(self, other):
-        ret = False
-        other = map(int, other)
-        for i in self.alive_nodes():
-            if i not in other:
-                return False
-        for i in other:
-            if i not in self.alive_nodes():
-                return False
-        return True
+        return sorted(self.alive_nodes()) == sorted(other)
 
 class MonitorService(object):
 
@@ -234,14 +228,25 @@ def main():
                 (len(monitor.stable_nodes()), str(monitor.stable_nodes())))
 
     def stable_network():
-        global inited
-        if not monitor.stable and inited and len(monitor.nodes):
-            if monitor.alive_nodes() == monitor.stable_nodes():
+        global inited, reaction_time
+        if not monitor.stable and inited:
+            if sorted(monitor.alive_nodes()) == sorted(monitor.stable_nodes()):
+                Logger.log_self("stable", "network is now stable")
                 monitor.stable = True
-                send_signal()
+                if reaction_time >= time.time() + 10:
+                    s = str(time.time() - reaction_time)
+                    print("Reaction time: "+s)
+                    f = open("reaction.dat", "a")
+                    f.write(s+"\n")
+                    f.close
+                    reaction_time = -1
+                if reaction_time < 0:
+                    print("Send reaction signal")
+                    reaction_time = time.time()
+                    send_signal()
 
     def send_signal():
-        f = open("startup.pid", 'r')
+        f = open("reaction.pid", 'r')
         try:
             n = int(f.read())
             os.kill(n, signal.SIGUSR1)
@@ -252,11 +257,15 @@ def main():
         global inited
         if not inited and len(monitor.nodes) == 15:
             inited = True
+            
+    f = open("reaction.dat", "a")
+    f.write("init reaction.dat\n")
+    f.close
 
     LoopingCall(log_status).start(1)
     LoopingCall(alive_nodes).start(1)
-    LoopingCall(stable_network).start(0.1)
-    LoopingCall(network_inited).start(1)
+    LoopingCall(stable_network).start(1)
+    LoopingCall(network_inited).start(5)
 
     reactor.run()
 

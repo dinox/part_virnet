@@ -22,7 +22,7 @@ class Node(object):
     tcp_port = 13337            # my tcp port (initialized randomly in main())
     udp_port = 13338            # my udp port (initialized randomly in main())
 
-    TIMEOUT = 11                # timeout for nodes of the overlay
+    TIMEOUT = 16                # timeout for nodes of the overlay
     HEARTBEAT = 5               # heartbeat interval
     LOOKUP = 60                 # lookup interval
     PING = 30                   # ping interval
@@ -260,7 +260,7 @@ class ClientService(object):
                 print MyNode.overlay.nodes 
                 msg = {"command" : "overlay_view", "id" : MyNode.id, "nodes":\
                         MyNode.overlay.view()}
-                log("Debug", "overlay_view " +str(MyNode.overlay.view()))
+                log("view", "overlay_view " +str(MyNode.overlay.view()))
                 send_msg(MyNode.monitor, msg)
             except:
                 traceback.print_exc()
@@ -578,6 +578,16 @@ def client_heartbeat():
     for nodeID, node in MyNode.neighbourhood.nodes.items():
         if "host" in node:
             send_msg(node, msg)
+    try:
+        print MyNode.overlay.view()
+        print MyNode.overlay.nodes 
+        msg = {"command" : "overlay_view", "id" : MyNode.id, "nodes":\
+                        MyNode.overlay.view()}
+        send_msg(MyNode.monitor, msg)
+    except:
+        traceback.print_exc()
+
+
 
 # So we can know if the node is alive
 def monitor_heartbeat():
