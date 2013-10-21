@@ -1,4 +1,4 @@
-part_virnet
+Partitioned Overlay Network
 ===========
 
 Usage:
@@ -13,3 +13,7 @@ If you want to test the seq killing script add -k flag to startup.py
 
 If you are behind firewall, remove that and try again. If you can't you will need 
 to have tcp port 12345 open (or change that to port of your choice).
+
+Dependencies:
+Plumbum (pip install plumbum)
+Python 2.7.2
