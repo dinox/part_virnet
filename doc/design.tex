@@ -120,6 +120,18 @@ The routed messages are sent periodically as well. There is one source and one d
 
 This measurement is then sent to the monitor.
 
+\begin{center}
+    \begin{tabular}{| l | l | l | l |}
+    \hline
+    Route & Size & Real(ms) & Ideal (ms) \\ \hline
+    [2,9] & 1KB & 962.8 & 645.3 \\ \hline
+    [2,9] & 10KB & 1507.8 & 650.8 \\ \hline
+    [4,14] & 1KB & 1686.8 & 1126.9 \\ \hline
+    [4,14] & 10KB & 1395.6 & 689.3 \\ \hline
+    \hline
+    \end{tabular}
+\end{center}
+
 \subsection{Monitor}
 
 The monitor node receives all it's messages on the \textit{maintenance channel} and it also uses the twisted framework for this. The only participation in the network are the two DNS function, lookup and map. The monitor stores id, address pairs and returns them when requested. Additionally, the monitor has a log function that prints logging information from the client. However, most of the data is only displayed in the Debug mode to ensure readability. 
