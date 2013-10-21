@@ -53,15 +53,18 @@ class Monitor(object):
     def alive_nodes(self):
         def alive(node):
             return node["alive"]
-        return map(lambda n: int(n["id"]), filter(alive, self.nodes))
+        return sorted(map(lambda n: int(n["id"]), filter(alive, self.nodes)))
 
     def stable_nodes(self):
         stable = []
         for node in self.nodes:
             if node["stable"]:
                 stable.append(int(node["id"]))
-        return stable
+        return sorted(stable)
+
     def set_all_nostable(self):
+        print "network is now not stable"
+        self.stable = False
         for node in self.nodes:
             node["stable"] = False
 
@@ -71,6 +74,7 @@ class Monitor(object):
         node["id"] = int(id)
         node["ping"] = time.time()
         curr = self.get_node(id)
+        self.set_all_nostable()
         if curr:
             for k, v in node.items():
                 curr[k] = v
@@ -219,7 +223,6 @@ def main():
             if node["alive"] and node["ping"] < time.time() - 11:
                 node["alive"] = False
                 monitor.set_all_nostable()
-                monitor.stable = False
 
     def log_status():
         Logger.log_self("status", "%d alive nodes: %s" %
@@ -233,20 +236,10 @@ def main():
             if sorted(monitor.alive_nodes()) == sorted(monitor.stable_nodes()):
                 Logger.log_self("stable", "network is now stable")
                 monitor.stable = True
-                if reaction_time >= time.time() + 10:
-                    s = str(time.time() - reaction_time)
-                    print("Reaction time: "+s)
-                    f = open("reaction.dat", "a")
-                    f.write(s+"\n")
-                    f.close
-                    reaction_time = -1
-                if reaction_time < 0:
-                    print("Send reaction signal")
-                    reaction_time = time.time()
-                    send_signal()
+                send_signal()
 
     def send_signal():
-        f = open("reaction.pid", 'r')
+        f = open("startup.pid", 'r')
         try:
             n = int(f.read())
             os.kill(n, signal.SIGUSR1)
@@ -257,7 +250,7 @@ def main():
         global inited
         if not inited and len(monitor.nodes) == 15:
             inited = True
-            
+
     f = open("reaction.dat", "a")
     f.write("init reaction.dat\n")
     f.close
