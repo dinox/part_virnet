@@ -128,6 +128,7 @@ def signal_handler(signum, frame):
     got_signal = True
 
 o, monitor = parse_args()
+kill_flag = o.kill or False
 signal.signal(signal.SIGUSR1, signal_handler)
 pid = str(os.getpid())
 pidfile = "startup.pid"
@@ -136,5 +137,6 @@ print "pid = %s" % pid
 for node in nodes:
     Process(target=start_node, args=(node,)).start()
     pass
-kill_script(nodes)
+if kill_flag:
+    kill_script(nodes)
 os.unlink(pidfile)
