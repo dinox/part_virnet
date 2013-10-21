@@ -122,7 +122,11 @@ This measurement is then sent to the monitor.
 
 \subsection{Monitor}
 
-TODO: describe
+The monitor node receives all it's messages on the \textit{maintenance channel} and it also uses the twisted framework for this. The only participation in the network are the two DNS function, lookup and map. The monitor stores id, address pairs and returns them when requested. Additionally, the monitor has a log function that prints logging information from the client. However, most of the data is only displayed in the Debug mode to ensure readability. 
+
+Complementary to these message based functions, the monitor has a number of periodically executed function such as network inited, heartbeat, stable network and alive nodes. The network inited function checks if a certain number of nodes are alive. This is used for the reaction time test. Once the number is reached, the monitor sets a flag and ignores this function in the future. The heartbeat function prints the state of the network, that is the number of alive nodes and the number of stable nodes. A node is called stable, if it has the same view of the network as the monitor. Each node sends in its heartbeat message it's list of nodes in the network to the monitor. In the stable network function, the monitor compares this node with it's own list and sets the number of nodes that are stable. The node alive function checks when each node has sent the last heartbeat message, if a certain timeout is reached a node is declared as dead.
+
+If all nodes in the network are stable, the monitor sends a signal to the startup script (both have to run on the same machine) to initialize the next change in the network, either a kill or the start of a new node. The time between change and stable network is measured in the startup script.
 
 \subsection{Scripts}
 
