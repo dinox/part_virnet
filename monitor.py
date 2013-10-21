@@ -89,7 +89,9 @@ class Monitor(object):
         return None
 
     def view_is_same_as(self, other):
-        return self.alive_nodes() == other
+        print(self.alive_nodes())
+        print(other)
+        return sorted(self.alive_nodes()) == sorted(other)
 
 class MonitorService(object):
 
@@ -215,7 +217,7 @@ def main():
 
     def alive_nodes():
         for node in monitor.nodes:
-            if node["alive"] and node["ping"] < time.time() - 5:
+            if node["alive"] and node["ping"] + 16 < time.time():
                 node["alive"] = False
                 monitor.set_all_nostable()
                 monitor.stable = False

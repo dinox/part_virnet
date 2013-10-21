@@ -139,15 +139,7 @@ TODO: describe
 %------------------------------------------------
 
 \subsection{Real vs ideal latency}
-The nodes keep track of when the last ping from the coordinator was received, and when a certain time has progressed (we used 25 seconds) then the coordinator is considered dead. The election of a new coordinator is done according to the following list:
-\begin{itemize}
-	\item Send a ping to the current coordinator, if he responds exit.
-	\item Take the member which has the lowest ID and ping him. If he responds, he is the new coordinator.
-	\begin{itemize}
-		\item If not, take the member with the second lowest ID and so on.
-	\end{itemize}
-	\item If I am the member with lowest ID, I am the new coordinator. Send out a member's list to all members that is still in the list.
-\end{itemize}
+
 
 %------------------------------------------------
 
