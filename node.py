@@ -25,10 +25,9 @@ class Node(object):
     TIMEOUT = 16                # timeout for nodes of the overlay
     HEARTBEAT = 5               # heartbeat interval
     LOOKUP = 60                 # lookup interval
-    PING = 30                   # ping interval
+    PING = 15                   # ping interval
 
-    route_src = 2               # source node of routed msg
-    route_dst = 9               # dest node of routed msg
+    msg_routes = [["2","9"],["4","14"]] # routed message path
     is_small = True             # flag for the size of the routed msg, always
                                 # switched (first send 1kb, then 10kb, then
                                 # 1kb,...)
@@ -505,8 +504,6 @@ def alive_heartbeat():
 
 def route_msg_heartbeat():
     global MyNode
-    source = MyNode.route_src
-    dest = MyNode.route_dst
     # set the size of the package, switch flag (next time the other size will be
     # sent)
     size = 1000
@@ -514,14 +511,17 @@ def route_msg_heartbeat():
         size = 10000
     MyNode.is_small = not MyNode.is_small
 
-    if MyNode.id == source and dest in MyNode.overlay.route:
-        try:
-            log("Debug", "routed_msg: Send msg from node"+source+" to node"+dest)
-            msg = {"command":"request_reply","time":str(gettime()),"size":size/1000,\
+    for route in MyNode.msg_routes:
+        source = route[0]
+        dest = route[1]
+        if MyNode.id == source and dest in MyNode.overlay.route:
+            try:
+                log("Debug", "routed_msg: Send msg from node"+source+" to node"+dest)
+                msg = {"command":"request_reply","time":str(gettime()),"size":size/1000,\
                 "load":'a'*size,"source":MyNode.id,"ideal":cal_ideal_latency(dest)}
-            send_msg_to_node(dest, msg)
-        except:
-            traceback.print_exc()
+                send_msg_to_node(dest, msg)
+            except:
+                traceback.print_exc()
 
 def cal_ideal_latency(dest):
     global MyNode
