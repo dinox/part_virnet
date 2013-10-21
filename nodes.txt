@@ -1,15 +1,3 @@
 1:planetlab1.inf.ethz.ch
-5:planetlab05.mpi-sws.mpg.de
-6:planetlab1.s3.kth.se
-9:planetlab2.s3.kth.se
-13:planet1.inf.tu-dresden.de
 2:planetlab6.cs.cornell.edu
 3:planetlab1.cs.uml.edu
-7:planetlab01.cs.washington.edu
-11:righthand.eecs.harvard.edu
-12:planetlab-01.bu.edu
-14:planetlab-01.ece.uprm.edu
-4:plab1.cs.ust.hk
-8:csplanetlab3.kaist.ac.kr
-10:pl1.sos.info.hiroshima-cu.ac.jp
-15:planet1.pnl.nitech.ac.jp
